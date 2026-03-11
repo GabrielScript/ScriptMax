@@ -1,0 +1,9 @@
+streamlit>=1.30.0
+faster-whisper>=1.0.0
+soundfile>=0.12.1
+noisereduce>=3.0.0
+scipy>=1.10.1
+numpy>=1.24.0
+openai>=1.12.0
+fpdf>=1.7.2
+markdown>=3.5.2

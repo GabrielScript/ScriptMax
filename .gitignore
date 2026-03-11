@@ -1,0 +1,42 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+env/
+.env/
+.venv/
+env.bak/
+venv.bak/
+
+# Environment variables
+.env
+.env.local
+
+# Relatórios gerados pelo app
+relatorios/
+*.pdf
+*.html
+
+# Arquivos temporários de áudio
+temp_*
+*.wav
+*.mp3
+*.m4a
+*.ogg
+
+# Streamlit cache e configurações específicas do usuário
+.streamlit/
+*.pyc
+
+# IDEs e Editores
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
