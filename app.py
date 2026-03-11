@@ -5,7 +5,6 @@ import os
 import json
 import re
 from datetime import datetime
-from audio_recorder import AudioRecorder
 from audio_enhancer import AudioEnhancer
 from transcriber import Transcriber
 from summarizer import Summarizer
@@ -17,8 +16,6 @@ REPORTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "relatori
 INDEX_FILE = os.path.join(REPORTS_DIR, "index.json")
 
 # --- Inicialização de componentes ---
-if 'recorder' not in st.session_state:
-    st.session_state.recorder = AudioRecorder()
 
 @st.cache_resource
 def get_transcriber_v2():
@@ -252,37 +249,51 @@ tab1, tab2 = st.tabs(["🎙️ Gravar Aula", "📁 Fazer Upload de Áudio"])
 # --- TAB 1: GRAVAR AULA ---
 with tab1:
     st.header("Gravar Aula ao Vivo")
-    st.write("Aperte 'Iniciar Gravação'. Quando detectar 5 min de silêncio, encerra automaticamente.")
+    st.write("Clique no botão abaixo para começar a gravar usando o microfone do seu navegador/celular.")
 
-    col1, col2 = st.columns(2)
-    with col1:
-        start_btn = st.button("🔴 Iniciar Gravação", disabled=st.session_state.recorder.is_recording or not subject)
-    with col2:
-        stop_btn = st.button("⏹️ Forçar Parada", disabled=not st.session_state.recorder.is_recording)
+    from streamlit_mic_recorder import mic_recorder
+    
+    if not subject:
+        st.info("⬆️ Preencha o assunto acima para habilitar o gravador.")
+    else:
+        # A key is important so that streamlit-mic-recorder knows which instance it is
+        audio = mic_recorder(
+            start_prompt="🔴 Iniciar Gravação",
+            stop_prompt="⏹️ Parar Gravação",
+            format="wav",
+            key='recorder'
+        )
 
-    status_placeholder = st.empty()
+        if audio:
+            # streamlit run reruns the app when the component updates.
+            # We want to process only if this is a new recording.
+            audio_id = audio.get('id', '')
+            
+            if st.session_state.get('last_recorded_audio_id') != audio_id:
+                st.info("Gravação recebida! Salvando arquivo temporário...")
+                
+                # Extract bytes and save to a temporary WAV file
+                temp_rec_path = f"temp_recorded_{audio_id}.wav"
+                with open(temp_rec_path, "wb") as f:
+                    f.write(audio['bytes'])
+                
+                # Check if file has some size
+                if os.path.exists(temp_rec_path) and os.path.getsize(temp_rec_path) > 100:
+                    process_file_and_generate_report(temp_rec_path, subject)
+                else:
+                    st.error("A gravação parece estar vazia ou falhou.")
+                
+                # Clean up the temporay file
+                if os.path.exists(temp_rec_path):
+                    try:
+                        os.remove(temp_rec_path)
+                    except Exception as e:
+                        pass
+                
+                st.session_state['last_recorded_audio_id'] = audio_id
+            else:
+                st.success("✔ Gravação processada! (Grave novamente ou mude o assunto)")
 
-    if start_btn:
-        st.session_state.recorder.start_recording()
-        st.rerun()
-
-    if stop_btn:
-        st.session_state.recorder.stop_recording()
-        st.session_state.recorder.stop_reason = "Parado manualmente pelo usuário"
-
-    if st.session_state.recorder.is_recording:
-        status_placeholder.warning("Gravando... Escutando ativamente (parada automática após 5 min de silêncio).")
-        time.sleep(1)
-        st.write("Pressione `Forçar Parada` se quiser terminar agora.")
-
-    elif not st.session_state.recorder.is_recording and len(st.session_state.recorder.audio_data) > 0:
-        status_placeholder.success(f"Gravação finalizada! Motivo: {st.session_state.recorder.stop_reason}")
-
-        wav_file = st.session_state.recorder.save_audio()
-        st.session_state.recorder.audio_data = []
-
-        if wav_file and subject:
-            process_file_and_generate_report(wav_file, subject)
 
 # --- TAB 2: UPLOAD DE ÁUDIO ---
 with tab2:
