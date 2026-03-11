@@ -160,23 +160,23 @@ def process_file_and_generate_report(audio_path, subject):
     col1, col2 = st.columns(2)
 
     with col1:
-        with open(html_path, "rb") as html_file:
-            st.download_button(
-                label="📐 Baixar HTML (com fórmulas)",
-                data=html_file,
-                file_name=os.path.basename(html_path),
-                mime="text/html",
-                type="primary"
-            )
-        st.caption("✨ Recomendado para exatas")
-
-    with col2:
         with open(pdf_path, "rb") as pdf_file:
             st.download_button(
-                label="📄 Baixar PDF",
+                label="📄 Baixar PDF (com fórmulas)",
                 data=pdf_file,
                 file_name=os.path.basename(pdf_path),
-                mime="application/pdf"
+                mime="application/pdf",
+                type="primary"
+            )
+        st.caption("✨ PDF com fórmulas renderizadas")
+
+    with col2:
+        with open(html_path, "rb") as html_file:
+            st.download_button(
+                label="📐 Baixar HTML",
+                data=html_file,
+                file_name=os.path.basename(html_path),
+                mime="text/html"
             )
         st.caption("Texto simples")
 

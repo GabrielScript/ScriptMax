@@ -7,3 +7,4 @@ numpy>=1.24.0
 openai>=1.12.0
 fpdf>=1.7.2
 markdown>=3.5.2
+playwright>=1.40.0

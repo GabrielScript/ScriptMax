@@ -448,77 +448,104 @@ Por favor, forneça o relatório final bem estruturado em português, com toda a
         return text
 
     def generate_pdf(self, report_text, output_filename="relatorio_aula.pdf"):
-        """Generate a PDF with full Unicode support (DejaVu Sans from fpdf2)."""
+        """
+        Gera PDF a partir do HTML renderizado com MathJax.
+        Usa Playwright (headless Chromium) para renderizar as fórmulas perfeitamente.
+        """
+        import time as _time
+
+        # 1. Primeiro gerar o HTML temporário
+        html_temp = output_filename.replace(".pdf", "_temp_for_pdf.html")
+        self.generate_html_report(report_text, html_temp)
+
+        try:
+            from playwright.sync_api import sync_playwright
+
+            print("📄 Gerando PDF com fórmulas renderizadas (Playwright + MathJax)...")
+            start = _time.time()
+
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                page = browser.new_page()
+
+                # Abrir o HTML local no navegador
+                abs_path = os.path.abspath(html_temp)
+                page.goto(f"file:///{abs_path}", wait_until="networkidle")
+
+                # Esperar o MathJax terminar de renderizar todas as fórmulas
+                page.wait_for_timeout(2000)  # Espera inicial para MathJax carregar
+                try:
+                    page.wait_for_function(
+                        """() => {
+                            if (typeof MathJax === 'undefined') return true;
+                            if (MathJax.startup && MathJax.startup.promise) {
+                                return MathJax.startup.promise.then(() => true).catch(() => true);
+                            }
+                            return true;
+                        }""",
+                        timeout=15000
+                    )
+                except Exception:
+                    pass  # Se timeout, continua mesmo assim — fórmulas simples já renderizaram
+
+                page.wait_for_timeout(1000)  # Pequena pausa extra para garantir
+
+                # Exportar para PDF com configurações de impressão
+                page.pdf(
+                    path=output_filename,
+                    format="A4",
+                    print_background=True,
+                    margin={
+                        "top": "20mm",
+                        "bottom": "20mm",
+                        "left": "15mm",
+                        "right": "15mm"
+                    }
+                )
+
+                browser.close()
+
+            elapsed = _time.time() - start
+            print(f"✅ PDF com fórmulas renderizadas gerado em {elapsed:.1f}s: {output_filename}")
+
+        except Exception as e:
+            print(f"⚠️ Erro ao gerar PDF via Playwright: {e}")
+            print("   Gerando PDF simples como fallback...")
+            self._generate_pdf_fallback(report_text, output_filename)
+
+        finally:
+            # Limpar HTML temporário
+            if os.path.exists(html_temp):
+                try:
+                    os.remove(html_temp)
+                except:
+                    pass
+
+        return output_filename
+
+    def _generate_pdf_fallback(self, report_text, output_filename):
+        """Fallback: gera PDF básico com texto puro (sem fórmulas renderizadas)."""
         from fpdf import FPDF
 
         pdf = FPDF()
         pdf.add_page()
         pdf.set_auto_page_break(auto=True, margin=15)
-
-        # fpdf2 inclui DejaVu Sans embutida com suporte completo a Unicode
-        # (inclui ∈, ℝ, ℂ, ∫, Σ, ∞, →, ∀, ∃, etc.)
-        font_name = "DejaVu"
-        try:
-            pdf.add_font("DejaVu", "", os.path.join(os.path.dirname(__file__), "fonts", "DejaVuSans.ttf"))
-            pdf.add_font("DejaVu", "B", os.path.join(os.path.dirname(__file__), "fonts", "DejaVuSans-Bold.ttf"))
-        except Exception:
-            # Tentar caminhos do sistema Windows
-            try:
-                pdf.add_font("DejaVu", "", "C:/Windows/Fonts/DejaVuSans.ttf")
-                pdf.add_font("DejaVu", "B", "C:/Windows/Fonts/DejaVuSans-Bold.ttf")
-            except Exception:
-                # Último recurso: Arial com sanitização agressiva
-                font_name = "Helvetica"
-                print("⚠️ DejaVu Sans não encontrada, usando Helvetica (sem suporte Unicode completo)")
-
-        cleaned_text = self.clean_text_for_pdf(report_text)
-
-        # Sanitizar caracteres que a fonte pode não suportar
-        def safe_text(text):
-            """Remove caracteres que a fonte não consegue renderizar."""
-            try:
-                text.encode('latin-1')
-                return text
-            except UnicodeEncodeError:
-                if font_name == "Helvetica":
-                    # Para Helvetica, manter apenas ASCII + Latin-1
-                    return ''.join(c if ord(c) < 256 else '?' for c in text)
-                return text  # DejaVu suporta Unicode
-
-        # Title
-        pdf.set_font(font_name, style="B", size=16)
-        pdf.cell(0, 10, safe_text("Relatório Detalhado da Aula"), ln=True, align='C')
+        pdf.set_font("Helvetica", style="B", size=14)
+        pdf.cell(0, 10, "Relatorio da Aula", ln=True, align='C')
         pdf.ln(5)
-        pdf.set_font(font_name, size=9)
+        pdf.set_font("Helvetica", size=9)
         pdf.set_text_color(128, 128, 128)
-        pdf.cell(0, 6, safe_text("(Para fórmulas perfeitas, abra o arquivo HTML no navegador)"), ln=True, align='C')
+        pdf.cell(0, 6, "(Formulas nao renderizadas - instale Playwright para PDF completo)", ln=True, align='C')
         pdf.set_text_color(0, 0, 0)
         pdf.ln(10)
+        pdf.set_font("Helvetica", size=10)
 
-        # Body — com tratamento robusto de erros
-        pdf.set_font(font_name, size=11)
+        cleaned = self.clean_text_for_pdf(report_text)
+        safe = cleaned.encode('ascii', errors='replace').decode('ascii')
         try:
-            pdf.multi_cell(0, 7, txt=safe_text(cleaned_text))
-        except Exception as e:
-            print(f"⚠️ Erro no PDF com texto completo: {e}")
-            try:
-                # Fallback: remover todos os caracteres não-ASCII
-                ascii_text = cleaned_text.encode('ascii', errors='replace').decode('ascii')
-                pdf.multi_cell(0, 7, txt=ascii_text)
-            except Exception as e2:
-                print(f"⚠️ Fallback final do PDF: {e2}")
-                pdf.multi_cell(0, 7, txt="Erro ao gerar PDF. Por favor, use o arquivo HTML.")
+            pdf.multi_cell(0, 6, txt=safe)
+        except:
+            pdf.multi_cell(0, 6, txt="Erro ao gerar conteudo. Abra o HTML.")
 
-        try:
-            pdf.output(output_filename)
-            print(f"✅ PDF gerado: {output_filename}")
-        except Exception as e:
-            print(f"⚠️ Erro ao salvar PDF: {e}")
-            # Criar um PDF mínimo para não quebrar o fluxo
-            pdf_min = FPDF()
-            pdf_min.add_page()
-            pdf_min.set_font("Helvetica", size=12)
-            pdf_min.multi_cell(0, 10, txt="Relatorio gerado. Para formulas, abra o arquivo HTML.")
-            pdf_min.output(output_filename)
-
-        return output_filename
+        pdf.output(output_filename)
+        print(f"✅ PDF fallback gerado: {output_filename}")
