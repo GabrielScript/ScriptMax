@@ -4,17 +4,29 @@ from faster_whisper import WhisperModel, BatchedInferencePipeline
 
 class Transcriber:
     def __init__(self):
-        # Modelo 'base' com int8 na CPU — bom equilíbrio qualidade/velocidade
-        print("Carregando modelo faster-whisper (small, CPU, int8)...")
-        model = WhisperModel(
-            "small",
-            device="cpu",
-            compute_type="int8",
-            cpu_threads=os.cpu_count() or 8,  # Usa todas as threads disponíveis
-        )
+        print("Detectando melhor hardware disponível para o Whisper...")
+        try:
+            # 1. Tenta carregar velocidade máxima na GPU (Google Colab / Kaggle)
+            model = WhisperModel(
+                "large-v3",
+                device="cuda",
+                compute_type="float16",
+            )
+            print("✅ GPU CUDA detectada! Modelo 'large-v3' (float16) carregado com sucesso.")
+        except Exception as e:
+            # 2. Fallback automático para o PC local (CPU)
+            print("🖥️ CUDA não encontrado. Usando CPU (Fallback automático).")
+            print("Carregando modelo faster-whisper (small, CPU, int8)...")
+            model = WhisperModel(
+                "small",
+                device="cpu",
+                compute_type="int8",
+                cpu_threads=os.cpu_count() or 8,  # Usa todas as threads disponíveis
+            )
+            print(f"Modelo CPU carregado! (threads: {os.cpu_count() or 4})")
+            
         # BatchedInferencePipeline: processa chunks de áudio em paralelo (~4-8x mais rápido)
         self.pipeline = BatchedInferencePipeline(model=model)
-        print(f"Modelo carregado! (CPU threads: {os.cpu_count() or 4})")
 
     def transcribe(self, audio_filepath):
         """
