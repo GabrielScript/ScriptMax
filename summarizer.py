@@ -22,53 +22,43 @@ class Summarizer:
         )
 
     def summarize(self, transcription_text):
-        """Send the full transcription to DeepSeek and ask for a detailed, math-aware summary."""
+        """Send the full transcription to DeepSeek and ask for an adaptive, context-aware summary."""
         prompt = f"""
-Você é um especialista em educação e sumarização de conteúdos complexos, com domínio total de notação matemática.
+Você é um especialista em educação estruturada, elaboração de atas executivas e formatação avançada de conteúdos complexos.
 
-Abaixo está a transcrição de uma aula ou palestra. Sua tarefa é gerar um relatório EXTREMAMENTE extenso, longo e detalhado.
+Abaixo está a transcrição (gerada por IA) de uma gravação. Sua tarefa é analisar o contexto dessa gravação e gerar um relatório organizando perfeitamente a transcrição de forma fluida. O relatório deve ser EXTREMAMENTE extenso e detalhado.
 
-## REGRAS OBRIGATÓRIAS PARA CONTEÚDO MATEMÁTICO:
+## PASSO 1: ANÁLISE DE CONTEXTO
+Antes de iniciar o relatório, identifique sobre o que a transcrição se trata e escolha UMA das duas abordagens abaixo:
 
-1. **TODAS** as fórmulas, equações e expressões matemáticas devem usar notação LaTeX:
+### ABORDAGEM A: Exatas, Engenharia e Computação (Modo Matemático)
+Se o áudio contiver equações, matemática de nível médio/superior, programação, física ou teorias exatas:
+1. **TODAS** as fórmulas, equações e expressões matemáticas devem MANDATORIAMENTE usar notação LaTeX:
    - Inline: `$formula$` (ex: $x^2 + y^2 = r^2$)
    - Bloco centralizado: `$$formula$$` (ex: $$\\int_0^1 x^2 \\, dx = \\frac{{1}}{{3}}$$)
+2. Identifique e converta matrizes (`\\begin{{bmatrix}}`), sistemas (`\\begin{{cases}}`), derivadas, integrais, limites e símbolos matemáticos espalhados pela fala em LaTeX.
+3. Se o professor disser uma fórmula por extenso, converta-a para a fórmula matemática formal.
+4. Estruture como a "Apostila Definitiva" sobre a matéria.
 
-2. Para **matrizes**, use:
-   $$\\begin{{bmatrix}} a & b \\\\ c & d \\end{{bmatrix}}$$
+### ABORDAGEM B: Humanidades, Teoria, Direito e Reuniões corporativas (Modo Orgânico)
+Se o áudio for sobre ciências sociais, negócios, literatura, leis ou uma reunião de trabalho diária:
+1. **NÃO FORCE fórmulas matemáticas**. Não tente criar matrizes/equações artificiais (ex: não escreva "Receita = Lucro + Despesas" em LaTeX, escreva naturalmente no texto).
+2. Escreva com foco gigantesco em **fluidez de leitura**. Use parágrafos muito bem escritos, conectivos lógicos e encadeamento de ideias.
+3. Se for uma reunião: Estruture as metas, defina as responsabilidades distribuídas (Action Items), os acordos, os prazos e as deliberações.
+4. Se for aula teórica: Foque nos argumentos do professor, nos fatos históricos/legais, exemplos práticos discutidos e filosofias, como um ensaio ou ata executiva perfeitamente polida.
 
-3. Para **sistemas de equações**, use:
-   $$\\begin{{cases}} x + y = 5 \\\\ 2x - y = 1 \\end{{cases}}$$
+## REGRAS GERAIS E OBRIGATÓRIAS (Para ambas as abordagens):
+- Organize por grandes tópicos e subtópicos lógicos usando # e ##.
+- Use **negrito** para destacar conceitos-chave, pessoas citadas, regras de negócio ou termos técnicos vitais.
+- Use > (blockquote) para citações diretas, regras universais, artigos de leis ou definições irrefutáveis.
+- NÃO omita detalhes cruciais ou conversas de rodapé que construíram a base lógica da decisão.
 
-4. Para **derivadas**: $\\frac{{d}}{{dx}}f(x)$, $f'(x)$, $\\frac{{\\partial f}}{{\\partial x}}$
-5. Para **integrais**: $\\int_a^b f(x)\\,dx$, $\\iint$, $\\oint$
-6. Para **limites**: $\\lim_{{x \\to \\infty}} f(x)$
-7. Para **somatórios**: $\\sum_{{i=1}}^{{n}} a_i$, $\\prod_{{i=1}}^{{n}} a_i$
-8. Para **vetores**: $\\vec{{v}}$, $\\hat{{u}}$
-9. Para **símbolos**: $\\forall$, $\\exists$, $\\in$, $\\subset$, $\\cup$, $\\cap$, $\\infty$, $\\neq$, $\\leq$, $\\geq$, $\\approx$
-10. Para **frações**: $\\frac{{numerador}}{{denominador}}$
-11. Para **raízes**: $\\sqrt{{x}}$, $\\sqrt[n]{{x}}$
-
-## REGRAS DE FORMATAÇÃO:
-
-- Organize por grandes tópicos e subtópicos usando # e ##
-- Use bullet points para listas
-- Use **negrito** para conceitos-chave
-- Use > (blockquote) para teoremas e definições importantes
-- Não omita detalhes cruciais
-- Aja como se estivesse criando a "Apostila Definitiva" sobre o assunto
-
-## IMPORTANTE:
-- Mesmo que o professor tenha DITO a fórmula por extenso (ex: "integral de x ao quadrado dx"), você DEVE convertê-la para notação LaTeX ($\\int x^2 \\, dx$)
-- Sempre forneça o contexto e explicação ao redor da fórmula
-- Se houver demonstrações ou provas, reproduza os passos com as fórmulas em LaTeX
-
-Transcrição:
+Transcrição Bruta:
 -------------------------
 {transcription_text}
 -------------------------
 
-Por favor, forneça o relatório final bem estruturado em português, com toda a matemática em LaTeX.
+Por favor, forneça o relatório final bem estruturado em português, baseado na Abordagem que melhor se adequar ao texto acima.
 """
         print("Enviando texto para o modelo DeepSeek...")
         try:
