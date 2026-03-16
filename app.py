@@ -83,6 +83,31 @@ def _save_reports(subject, report_text, summarizer):
     return html_path, pdf_path
 
 
+def _delete_report(entry_to_delete):
+    """Remove um relatório do disco e do índice."""
+    index = _load_report_index()
+    
+    # Encontrar a entrada no índice (comparando por date/timestamp que são únicos)
+    new_index = [
+        entry for entry in index 
+        if entry.get("date") != entry_to_delete.get("date")
+    ]
+    
+    if len(new_index) < len(index):
+        # Tentar deletar arquivos físicos
+        paths = [entry_to_delete.get("html"), entry_to_delete.get("pdf")]
+        for p in paths:
+            if p and os.path.exists(p):
+                try:
+                    os.remove(p)
+                except Exception as e:
+                    print(f"Erro ao deletar arquivo {p}: {e}")
+        
+        _save_report_index(new_index)
+        return True
+    return False
+
+
 def process_file_and_generate_report(audio_path, subject):
     """Pipeline completo: Enhancement → Transcrição → Relatório → Salvamento."""
     enhancer = get_enhancer()
@@ -225,6 +250,18 @@ with st.sidebar:
                                 mime="application/pdf",
                                 key=f"sidebar_pdf_{entry['date']}",
                             )
+                    
+                    # Botão de Deletar com Confirmação
+                    with st.popover("🗑️"):
+                        st.warning("Excluir este relatório?")
+                        if st.button("Sim, excluir", key=f"del_{entry['date']}", type="primary", use_container_width=True):
+                            if _delete_report(entry):
+                                st.success("Apagado!")
+                                time.sleep(1)
+                                st.rerun()
+                            else:
+                                st.error("Erro ao apagar.")
+                                
                     st.divider()
 
 
@@ -297,26 +334,45 @@ with tab1:
 # --- TAB 2: UPLOAD DE ÁUDIO ---
 with tab2:
     st.header("Upload de Áudio Existente")
-    uploaded_file = st.file_uploader("Envie seu arquivo de áudio (wav, mp3, m4a...)", type=["wav", "mp3", "m4a", "ogg"])
+    uploaded_files = st.file_uploader(
+        "Envie seus arquivos de áudio (wav, mp3, m4a...)", 
+        type=["wav", "mp3", "m4a", "ogg"],
+        accept_multiple_files=True
+    )
 
-    if uploaded_file is not None and subject:
-        file_id = f"{uploaded_file.name}_{uploaded_file.size}_{subject}"
+    if uploaded_files and subject:
+        if 'processed_files' not in st.session_state:
+            st.session_state['processed_files'] = set()
 
-        if st.session_state.get('last_processed_file') != file_id:
-            temp_audio_path = f"temp_{uploaded_file.name}"
-            with open(temp_audio_path, "wb") as f:
-                f.write(uploaded_file.getbuffer())
-
-            process_file_and_generate_report(temp_audio_path, subject)
-
-            if os.path.exists(temp_audio_path):
-                try:
-                    os.remove(temp_audio_path)
-                except:
-                    pass
-
-            st.session_state['last_processed_file'] = file_id
+        total_files = len(uploaded_files)
+        files_to_process = [f for f in uploaded_files if f"{f.name}_{f.size}_{subject}" not in st.session_state['processed_files']]
+        
+        if not files_to_process:
+            st.success(f"✔ Todos os {total_files} arquivos selecionados já foram processados! Envie novos áudios ou altere o assunto.")
         else:
-            st.success(f"✔ O arquivo '{uploaded_file.name}' já foi processado! Envie um novo áudio ou altere o assunto.")
-    elif uploaded_file is not None and not subject:
+            st.write(f"### 🚀 Processando {len(files_to_process)} novos arquivos de um total de {total_files}")
+            
+            for i, uploaded_file in enumerate(files_to_process):
+                file_id = f"{uploaded_file.name}_{uploaded_file.size}_{subject}"
+                
+                with st.status(f"⏳ Processando arquivo {i+1} de {len(files_to_process)}: **{uploaded_file.name}**", expanded=True) as status:
+                    temp_audio_path = f"temp_{uploaded_file.name}"
+                    with open(temp_audio_path, "wb") as f:
+                        f.write(uploaded_file.getbuffer())
+
+                    process_file_and_generate_report(temp_audio_path, f"{subject} - {uploaded_file.name}")
+
+                    if os.path.exists(temp_audio_path):
+                        try:
+                            os.remove(temp_audio_path)
+                        except:
+                            pass
+
+                    st.session_state['processed_files'].add(file_id)
+                    status.update(label=f"✅ Arquivo {i+1} concluído: {uploaded_file.name}", state="complete", expanded=False)
+
+            st.success(f"🎉 Todos os {len(files_to_process)} arquivos foram processados com sucesso!")
+            st.balloons()
+            
+    elif uploaded_files and not subject:
         st.warning("⬆️ Informe o assunto da aula acima antes de processar.")
