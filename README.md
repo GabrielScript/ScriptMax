@@ -1,6 +1,6 @@
 # MaxClass PDF Generator (ScriptMax) 🎓🎤
 
-Uma aplicação web construída com **Streamlit** que utiliza Inteligência Artificial para transcrever aulas gravadas ou enviadas (MP3, WAV, etc.), melhorar a qualidade do áudio e gerar resumos e apostilas detalhadas automaticamente usando o modelo **DeepSeek**.
+Uma aplicação web construída com **Streamlit** que utiliza Fast-Whisper para transcrever aulas gravadas ou enviadas (MP3, WAV, etc.), melhorar a qualidade do áudio e gerar resumos e apostilas detalhadas automaticamente usando o modelo **DeepSeek**.
 
 A plataforma suporta perfeitamente aulas de exatas (Matemática, Física) renderizando equações complexas via LaTeX e MathJax.
 
