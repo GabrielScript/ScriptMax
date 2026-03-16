@@ -7,6 +7,7 @@ from datetime import datetime
 from audio_enhancer import AudioEnhancer
 from transcriber import Transcriber
 from summarizer import Summarizer
+from email_sender import EmailSender
 
 st.set_page_config(page_title="MaxClass PDF Generator (DeepSeek)", page_icon="🎤", layout="centered")
 
@@ -201,6 +202,16 @@ def process_file_and_generate_report(audio_path, subject):
             )
         st.caption("Texto simples")
 
+    # --- Envio de E-mail Automático ---
+    if st.session_state.get("auto_email_enabled", False):
+        recipient = st.session_state.get("email_recipient", "gabrielestrela8@gmail.com")
+        with st.spinner(f"📧 Enviando relatório para {recipient}..."):
+            sender = EmailSender()
+            if sender.send_report(subject, html_path, pdf_path, recipient):
+                st.success(f"📬 E-mail enviado para {recipient}!")
+            else:
+                st.error("⚠️ Falha ao enviar e-mail. Verifique as configurações no .env.")
+
     st.balloons()
 
 
@@ -263,6 +274,17 @@ with st.sidebar:
                                 st.error("Erro ao apagar.")
                                 
                     st.divider()
+
+    st.divider()
+    st.header("✉️ Configuração de E-mail")
+    st.session_state["auto_email_enabled"] = st.checkbox("Encaminhar para e-mail", value=True)
+    st.session_state["email_recipient"] = st.text_input(
+        "Destinatário", 
+        value="gabrielestrela8@gmail.com",
+        help="Os relatórios serão enviados para este endereço após a geração."
+    )
+    if st.session_state["auto_email_enabled"]:
+        st.caption("🚀 Envio automático ativado!")
 
 
 # ============================================================
