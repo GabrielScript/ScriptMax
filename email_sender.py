@@ -4,6 +4,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
+from typing import cast, Any
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -25,8 +26,8 @@ class EmailSender:
         recipient = recipient or self.default_recipient
         
         msg = MIMEMultipart()
-        msg['From'] = self.email_user
-        msg['To'] = recipient
+        msg['From'] = cast(str, self.email_user)
+        msg['To'] = cast(str, recipient)
         msg['Subject'] = f"🎓 ScriptMax: Relatório de Aula - {subject}"
 
         body = f"Olá!\n\nSeu relatório para a aula '{subject}' foi gerado com sucesso.\n\nEm anexo você encontrará a versão em PDF (com fórmulas) e a versão em HTML.\n\nAtenciosamente,\nEquipe ScriptMax"
@@ -53,9 +54,9 @@ class EmailSender:
         try:
             server = smtplib.SMTP(self.smtp_server, self.smtp_port)
             server.starttls()
-            server.login(self.email_user, self.email_password)
+            server.login(cast(str, self.email_user), cast(str, self.email_password))
             text = msg.as_string()
-            server.sendmail(self.email_user, recipient, text)
+            server.sendmail(cast(str, self.email_user), cast(str, recipient), text)
             server.quit()
             print(f"✅ E-mail enviado com sucesso para {recipient}")
             return True
