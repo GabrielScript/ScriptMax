@@ -38,7 +38,7 @@ class EmailSender:
                 part = MIMEBase('application', 'octet-stream')
                 part.set_payload(attachment.read())
                 encoders.encode_base64(part)
-                part.add_header('Content-Disposition', f"attachment; filename= {os.path.basename(pdf_path)}")
+                part.add_header('Content-Disposition', 'attachment', filename=os.path.basename(pdf_path))
                 msg.attach(part)
 
         # Attach HTML
@@ -47,7 +47,7 @@ class EmailSender:
                 part = MIMEBase('application', 'octet-stream')
                 part.set_payload(attachment.read())
                 encoders.encode_base64(part)
-                part.add_header('Content-Disposition', f"attachment; filename= {os.path.basename(html_path)}")
+                part.add_header('Content-Disposition', 'attachment', filename=os.path.basename(html_path))
                 msg.attach(part)
 
         try:
