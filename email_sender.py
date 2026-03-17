@@ -4,10 +4,10 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
+import dotenv # type: ignore
 from typing import cast, Any
-from dotenv import load_dotenv
 
-load_dotenv()
+dotenv.load_dotenv()
 
 class EmailSender:
     def __init__(self):
