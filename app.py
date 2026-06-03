@@ -4,7 +4,6 @@ import os
 import json
 import re
 from datetime import datetime
-from audio_enhancer import AudioEnhancer
 from transcriber import Transcriber
 from summarizer import Summarizer
 from email_sender import EmailSender
@@ -24,10 +23,6 @@ def get_transcriber_v2():
 @st.cache_resource
 def get_summarizer():
     return Summarizer()
-
-@st.cache_resource
-def get_enhancer():
-    return AudioEnhancer()
 
 
 def _load_report_index():
@@ -110,38 +105,23 @@ def _delete_report(entry_to_delete):
 
 
 def process_file_and_generate_report(audio_path, subject):
-    """Pipeline completo: Enhancement → Transcrição → Relatório → Salvamento."""
-    enhancer = get_enhancer()
+    """Pipeline: Transcrição → Relatório → Salvamento.
+
+    Sem etapa de denoising: o faster-whisper decodifica o áudio direto (1x, em
+    mono 16kHz) e o large-v3 já é robusto a ruído nativamente — mais rápido e,
+    na prática, mais preciso do que pré-processar com subtração espectral.
+    """
     transcriber = get_transcriber_v2()
     summarizer = get_summarizer()
 
     total_start = time.time()
 
-    # --- ETAPA 1: Melhoramento do áudio ---
-    st.info("🔧 Etapa 1/3 — Melhorando qualidade do áudio (removendo ruído)...")
-    t1 = time.time()
-    with st.spinner("Aplicando filtros de redução de ruído..."):
-        enhanced_path = enhancer.enhance(audio_path)
-    t1_elapsed = time.time() - t1
-
-    if enhanced_path != audio_path:
-        st.success(f"Áudio melhorado com sucesso! ({t1_elapsed:.1f}s)")
-    else:
-        st.warning(f"Não foi possível melhorar o áudio. Usando original. ({t1_elapsed:.1f}s)")
-
-    # --- ETAPA 2: Transcrição ---
-    st.info("🎤 Etapa 2/3 — Transcrevendo áudio...")
+    # --- ETAPA 1: Transcrição ---
+    st.info("🎤 Etapa 1/2 — Transcrevendo áudio (large-v3, modo máxima velocidade)...")
     t2 = time.time()
     with st.spinner("Transcrevendo com faster-whisper..."):
-        text = transcriber.transcribe(enhanced_path)
+        text = transcriber.transcribe(audio_path)
     t2_elapsed = time.time() - t2
-
-    # Limpar arquivo enhanced temporário
-    if enhanced_path != audio_path and os.path.exists(enhanced_path):
-        try:
-            os.remove(enhanced_path)
-        except:
-            pass
 
     if not text or text.startswith("Erro"):
         st.error("Falha ao transcrever o áudio.")
@@ -151,8 +131,8 @@ def process_file_and_generate_report(audio_path, subject):
     with st.expander("Ver Transcrição Bruta"):
         st.write(text)
 
-    # --- ETAPA 3: Geração do relatório ---
-    st.info("📝 Etapa 3/3 — Gerando relatório com DeepSeek...")
+    # --- ETAPA 2: Geração do relatório ---
+    st.info("📝 Etapa 2/2 — Gerando relatório imenso com DeepSeek (múltiplas passagens)...")
     t3 = time.time()
     with st.spinner("Gerando relatório didático..."):
         report = summarizer.summarize(text)
@@ -172,11 +152,10 @@ def process_file_and_generate_report(audio_path, subject):
 
     # --- Métricas de tempo ---
     st.divider()
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("🔧 Denoising", f"{t1_elapsed:.0f}s")
-    m2.metric("🎤 Transcrição", f"{t2_elapsed:.0f}s")
-    m3.metric("🤖 DeepSeek", f"{t3_elapsed:.0f}s")
-    m4.metric("⏱️ Total", f"{total_elapsed:.0f}s")
+    m1, m2, m3 = st.columns(3)
+    m1.metric("🎤 Transcrição", f"{t2_elapsed:.0f}s")
+    m2.metric("🤖 DeepSeek", f"{t3_elapsed:.0f}s")
+    m3.metric("⏱️ Total", f"{total_elapsed:.0f}s")
 
     # Botões de download lado a lado
     col1, col2 = st.columns(2)

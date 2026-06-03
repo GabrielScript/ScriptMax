@@ -21,13 +21,82 @@ class Summarizer:
             base_url="https://api.deepseek.com"
         )
 
+    # Tamanho-alvo de cada bloco da transcrição (em caracteres) na geração em
+    # múltiplas passagens. ~6000 chars ≈ ~1500 palavras de fala por bloco.
+    CHUNK_CHARS = 6000
+
     def summarize(self, transcription_text):
-        """Send the full transcription to DeepSeek and ask for an adaptive, context-aware summary."""
+        """Gera um relatório IMENSO via geração em múltiplas passagens (chunking).
+
+        A transcrição é dividida em blocos sequenciais; cada bloco vira uma seção
+        detalhada do relatório. Assim o tamanho final não fica preso no teto de
+        tokens de uma única chamada do modelo.
+        """
+        text = (transcription_text or "").strip()
+        if not text:
+            return "Erro: transcrição vazia."
+
+        chunks = self._split_text(text, self.CHUNK_CHARS)
+        total = len(chunks)
+        print(f"Gerando relatório em {total} passagem(ns) (chunking)...")
+
+        parts = []
+        for i, chunk in enumerate(chunks, 1):
+            print(f"  → Enviando parte {i}/{total} para o DeepSeek...")
+            section = self._summarize_chunk(chunk, part=i, total=total)
+            if section and not section.startswith("Erro"):
+                parts.append(section)
+            else:
+                parts.append(f"> ⚠️ Falha ao gerar a parte {i}: {section}")
+
+        if not parts:
+            return "Erro ao gerar resumo: nenhuma parte foi produzida."
+
+        return "\n\n---\n\n".join(parts)
+
+    def _split_text(self, text, max_chars):
+        """Divide o texto em blocos <= max_chars respeitando fronteiras de frase."""
+        if len(text) <= max_chars:
+            return [text]
+
+        sentences = re.split(r'(?<=[.!?])\s+', text)
+        chunks, current = [], ""
+        for sentence in sentences:
+            if len(current) + len(sentence) + 1 > max_chars and current:
+                chunks.append(current.strip())
+                current = sentence
+            else:
+                current = f"{current} {sentence}".strip()
+        if current.strip():
+            chunks.append(current.strip())
+        return chunks
+
+    def _summarize_chunk(self, transcription_text, part=1, total=1):
+        """Send one transcription chunk to DeepSeek and ask for a detailed section."""
+        if total > 1:
+            intro_rule = ("Inclua uma introdução geral do conteúdo."
+                          if part == 1 else
+                          "NÃO repita introduções gerais — continue de onde a parte anterior parou.")
+            outro_rule = ("Inclua uma conclusão final consolidando tudo."
+                          if part == total else
+                          "NÃO escreva conclusão final ainda (haverá mais partes a seguir).")
+            context_note = f"""
+
+## CONTEXTO DE CONTINUIDADE (IMPORTANTE)
+Esta é a **PARTE {part} de {total}** de uma transcrição longa, dividida em blocos sequenciais.
+- Gere o relatório detalhado APENAS do conteúdo deste bloco.
+- {intro_rule}
+- {outro_rule}
+- Não escreva "Parte {part}" no título; apenas continue o conteúdo de forma fluida e contínua.
+"""
+        else:
+            context_note = ""
+
         prompt = f"""
 Você é um especialista em educação estruturada, elaboração de atas executivas e formatação avançada de conteúdos complexos.
 
 Abaixo está a transcrição (gerada por IA) de uma gravação. Sua tarefa é analisar o contexto dessa gravação e gerar um relatório organizando perfeitamente a transcrição de forma fluida. O relatório deve ser EXTREMAMENTE extenso e detalhado.
-
+{context_note}
 ## PASSO 1: ANÁLISE DE CONTEXTO
 Antes de iniciar o relatório, identifique sobre o que a transcrição se trata e escolha UMA das duas abordagens abaixo:
 
@@ -68,7 +137,7 @@ Por favor, forneça o relatório final bem estruturado em português, baseado na
                     {"role": "system", "content": "Você é um assistente educacional especialista em criar resumos super detalhados e didáticos. Quando o conteúdo envolve matemática, você SEMPRE usa notação LaTeX para fórmulas, equações, matrizes e expressões matemáticas. Use $...$ para inline e $$...$$ para blocos."},
                     {"role": "user", "content": prompt}
                 ],
-                max_tokens=8000,
+                max_tokens=8192,
                 temperature=0.3
             )
             report_text = response.choices[0].message.content
