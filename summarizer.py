@@ -1,7 +1,9 @@
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor
+
 import markdown
-from openai import OpenAI
+import anthropic
 from dotenv import load_dotenv
 from fpdf import FPDF
 
@@ -10,16 +12,17 @@ load_dotenv()
 
 
 class Summarizer:
-    def __init__(self):
-        # Using DeepSeek API
-        api_key = os.getenv("DEEPSEEK_API_KEY")
-        if not api_key:
-            print("WARNING: DEEPSEEK_API_KEY not found in .env")
+    # Claude Haiku 4.5 — rápido, forte em PT/LaTeX e mantém o conteúdo na
+    # Anthropic (sem trafegar dados sigilosos da clínica para terceiros).
+    MODEL = "claude-haiku-4-5"
 
-        self.client = OpenAI(
-            api_key=api_key,
-            base_url="https://api.deepseek.com"
-        )
+    def __init__(self):
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not api_key:
+            print("WARNING: ANTHROPIC_API_KEY not found in .env")
+
+        # Cliente reaproveitado entre threads (httpx é thread-safe).
+        self.client = anthropic.Anthropic(api_key=api_key) if api_key else None
 
     # Tamanho-alvo de cada bloco da transcrição (em caracteres) na geração em
     # múltiplas passagens. ~6000 chars ≈ ~1500 palavras de fala por bloco.
@@ -38,21 +41,37 @@ class Summarizer:
 
         chunks = self._split_text(text, self.CHUNK_CHARS)
         total = len(chunks)
-        print(f"Gerando relatório em {total} passagem(ns) (chunking)...")
 
-        parts = []
-        for i, chunk in enumerate(chunks, 1):
-            print(f"  → Enviando parte {i}/{total} para o DeepSeek...")
-            section = self._summarize_chunk(chunk, part=i, total=total)
+        if total == 1:
+            section = self._summarize_chunk(chunks[0], part=1, total=1)
             if section and not section.startswith("Erro"):
-                parts.append(section)
-            else:
-                parts.append(f"> ⚠️ Falha ao gerar a parte {i}: {section}")
+                return section
+            return f"Erro ao gerar resumo: {section}"
 
-        if not parts:
+        # Os blocos são independentes (a continuidade é só instrução de prompt),
+        # então geramos todas as partes EM PARALELO. O tempo total cai de
+        # N×latência para ~1×latência. Resultado remontado na ordem original.
+        print(f"Gerando relatório em {total} passagens (paralelo)...")
+        parts = [None] * total
+        max_workers = min(total, 3)  # teto baixo evita estourar o rate limit da API
+
+        def _work(idx):
+            i = idx + 1
+            print(f"  → Enviando parte {i}/{total} para o Claude...")
+            section = self._summarize_chunk(chunks[idx], part=i, total=total)
+            if section and not section.startswith("Erro"):
+                parts[idx] = section
+            else:
+                parts[idx] = f"> ⚠️ Falha ao gerar a parte {i}: {section}"
+
+        with ThreadPoolExecutor(max_workers=max_workers) as ex:
+            list(ex.map(_work, range(total)))
+
+        produced = [p for p in parts if p]
+        if not produced:
             return "Erro ao gerar resumo: nenhuma parte foi produzida."
 
-        return "\n\n---\n\n".join(parts)
+        return "\n\n---\n\n".join(produced)
 
     def _split_text(self, text, max_chars):
         """Divide o texto em blocos <= max_chars respeitando fronteiras de frase."""
@@ -129,21 +148,30 @@ Transcrição Bruta:
 
 Por favor, forneça o relatório final bem estruturado em português, baseado na Abordagem que melhor se adequar ao texto acima.
 """
-        print("Enviando texto para o modelo DeepSeek...")
+        if self.client is None:
+            return "Erro: ANTHROPIC_API_KEY não configurada no .env."
+
+        system_prompt = (
+            "Você é um assistente educacional especialista em criar resumos super "
+            "detalhados e didáticos. Quando o conteúdo envolve matemática, você SEMPRE "
+            "usa notação LaTeX para fórmulas, equações, matrizes e expressões "
+            "matemáticas. Use $...$ para inline e $$...$$ para blocos."
+        )
         try:
-            response = self.client.chat.completions.create(
-                model="deepseek-chat",
-                messages=[
-                    {"role": "system", "content": "Você é um assistente educacional especialista em criar resumos super detalhados e didáticos. Quando o conteúdo envolve matemática, você SEMPRE usa notação LaTeX para fórmulas, equações, matrizes e expressões matemáticas. Use $...$ para inline e $$...$$ para blocos."},
-                    {"role": "user", "content": prompt}
-                ],
+            response = self.client.messages.create(
+                model=self.MODEL,
                 max_tokens=8192,
-                temperature=0.3
+                temperature=0.3,
+                system=system_prompt,
+                messages=[{"role": "user", "content": prompt}],
             )
-            report_text = response.choices[0].message.content
-            return report_text
+            text_out = next((b.text for b in response.content if b.type == "text"), "")
+            if not text_out.strip():
+                reason = getattr(response, "stop_reason", None) or "resposta vazia"
+                return f"Erro: o modelo não retornou conteúdo (stop_reason={reason})."
+            return text_out
         except Exception as e:
-            print(f"Erro ao acessar DeepSeek API: {e}")
+            print(f"Erro ao acessar a API da Anthropic: {e}")
             return f"Erro ao gerar resumo: {e}"
 
     def generate_html_report(self, report_text, output_filename="relatorio_aula.html"):
@@ -167,6 +195,7 @@ Por favor, forneça o relatório final bem estruturado em português, baseado na
 
     <!-- MathJax para renderização de fórmulas LaTeX -->
     <script>
+        window.mathjaxDone = false;
         MathJax = {{
             tex: {{
                 inlineMath: [['$', '$']],
@@ -177,6 +206,13 @@ Por favor, forneça o relatório final bem estruturado em português, baseado na
             }},
             options: {{
                 skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+            }},
+            startup: {{
+                pageReady: () => {{
+                    return MathJax.startup.defaultPageReady().then(() => {{
+                        window.mathjaxDone = true;
+                    }});
+                }}
             }}
         }};
     </script>
@@ -433,7 +469,7 @@ Por favor, forneça o relatório final bem estruturado em português, baseado na
     </div>
 
     <div class="footer">
-        <p>Gerado por MaxClass PDF Generator — Powered by DeepSeek & MathJax</p>
+        <p>Gerado por MaxClass PDF Generator — Powered by Claude & MathJax</p>
     </div>
 </body>
 </html>"""
@@ -506,50 +542,58 @@ Por favor, forneça o relatório final bem estruturado em português, baseado na
         text = re.sub(r'\{|\}', '', text)
         return text
 
-    def generate_pdf(self, report_text, output_filename="relatorio_aula.pdf"):
+    def generate_pdf(self, report_text, output_filename="relatorio_aula.pdf", html_source=None):
         """
-        Gera PDF a partir do HTML renderizado com MathJax.
-        Usa Playwright (headless Chromium) para renderizar as fórmulas perfeitamente.
+        Gera PDF a partir do HTML renderizado com MathJax (Playwright/Chromium).
+
+        Otimizações:
+          - Reusa o HTML já salvo (`html_source`) em vez de gerar um 2º temporário.
+          - Sem sleeps fixos: espera as fontes (`document.fonts.ready`) e, SÓ quando
+            há fórmulas, espera o MathJax sinalizar conclusão (`window.mathjaxDone`).
+          - `wait_until="load"` em vez de `networkidle` (não trava esperando CDN ocioso).
         """
         import time as _time
 
-        # 1. Primeiro gerar o HTML temporário
-        html_temp = output_filename.replace(".pdf", "_temp_for_pdf.html")
-        self.generate_html_report(report_text, html_temp)
+        # Reusa o HTML já escrito por generate_html_report; só cria temp se não veio.
+        temp_html = None
+        if html_source and os.path.exists(html_source):
+            html_path = html_source
+        else:
+            html_path = output_filename.replace(".pdf", "_temp_for_pdf.html")
+            self.generate_html_report(report_text, html_path)
+            temp_html = html_path
+
+        # Relatório sem LaTeX (Abordagem B) não precisa esperar o MathJax.
+        has_formulas = "$" in (report_text or "")
 
         try:
             from playwright.sync_api import sync_playwright
 
-            print("📄 Gerando PDF com fórmulas renderizadas (Playwright + MathJax)...")
+            print("📄 Gerando PDF (Playwright + MathJax)...")
             start = _time.time()
 
             with sync_playwright() as p:
                 browser = p.chromium.launch(headless=True)
                 page = browser.new_page()
 
-                # Abrir o HTML local no navegador
-                abs_path = os.path.abspath(html_temp)
-                page.goto(f"file:///{abs_path}", wait_until="networkidle")
+                abs_path = os.path.abspath(html_path)
+                page.goto(f"file:///{abs_path}", wait_until="load")
 
-                # Esperar o MathJax terminar de renderizar todas as fórmulas
-                page.wait_for_timeout(2000)  # Espera inicial para MathJax carregar
+                # Garante que as web fonts carregaram antes de imprimir.
                 try:
-                    page.wait_for_function(
-                        """() => {
-                            if (typeof MathJax === 'undefined') return true;
-                            if (MathJax.startup && MathJax.startup.promise) {
-                                return MathJax.startup.promise.then(() => true).catch(() => true);
-                            }
-                            return true;
-                        }""",
-                        timeout=15000
-                    )
+                    page.evaluate("async () => { await document.fonts.ready; }")
                 except Exception:
-                    pass  # Se timeout, continua mesmo assim — fórmulas simples já renderizaram
+                    pass
 
-                page.wait_for_timeout(1000)  # Pequena pausa extra para garantir
+                # Espera o MathJax SÓ se houver fórmulas — sinal real, sem sleep fixo.
+                if has_formulas:
+                    try:
+                        page.wait_for_function(
+                            "() => window.mathjaxDone === true", timeout=20000
+                        )
+                    except Exception:
+                        pass  # timeout: segue com o que já renderizou
 
-                # Exportar para PDF com configurações de impressão
                 page.pdf(
                     path=output_filename,
                     format="A4",
@@ -565,7 +609,7 @@ Por favor, forneça o relatório final bem estruturado em português, baseado na
                 browser.close()
 
             elapsed = _time.time() - start
-            print(f"✅ PDF com fórmulas renderizadas gerado em {elapsed:.1f}s: {output_filename}")
+            print(f"✅ PDF gerado em {elapsed:.1f}s: {output_filename}")
 
         except Exception as e:
             print(f"⚠️ Erro ao gerar PDF via Playwright: {e}")
@@ -573,19 +617,17 @@ Por favor, forneça o relatório final bem estruturado em português, baseado na
             self._generate_pdf_fallback(report_text, output_filename)
 
         finally:
-            # Limpar HTML temporário
-            if os.path.exists(html_temp):
+            # Limpa só o temporário que NÓS criamos (nunca o HTML salvo do usuário).
+            if temp_html and os.path.exists(temp_html):
                 try:
-                    os.remove(html_temp)
-                except:
+                    os.remove(temp_html)
+                except Exception:
                     pass
 
         return output_filename
 
     def _generate_pdf_fallback(self, report_text, output_filename):
         """Fallback: gera PDF básico com texto puro (sem fórmulas renderizadas)."""
-        from fpdf import FPDF
-
         pdf = FPDF()
         pdf.add_page()
         pdf.set_auto_page_break(auto=True, margin=15)

@@ -8,7 +8,7 @@ from transcriber import Transcriber
 from summarizer import Summarizer
 from email_sender import EmailSender
 
-st.set_page_config(page_title="MaxClass PDF Generator (DeepSeek)", page_icon="🎤", layout="centered")
+st.set_page_config(page_title="MaxClass PDF Generator (Claude)", page_icon="🎤", layout="centered")
 
 # --- Diretório base para relatórios salvos ---
 REPORTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "relatorios")
@@ -63,7 +63,8 @@ def _save_reports(subject, report_text, summarizer):
     pdf_path = os.path.join(subject_dir, f"{base_name}.pdf")
 
     summarizer.generate_html_report(report_text, html_path)
-    summarizer.generate_pdf(report_text, pdf_path)
+    # Reusa o HTML recém-escrito (evita gerar um 2º HTML temporário no PDF).
+    summarizer.generate_pdf(report_text, pdf_path, html_source=html_path)
 
     # Atualizar índice
     index = _load_report_index()
@@ -132,11 +133,17 @@ def process_file_and_generate_report(audio_path, subject):
         st.write(text)
 
     # --- ETAPA 2: Geração do relatório ---
-    st.info("📝 Etapa 2/2 — Gerando relatório imenso com DeepSeek (múltiplas passagens)...")
+    st.info("📝 Etapa 2/2 — Gerando relatório imenso com Claude Haiku 4.5 (passagens em paralelo)...")
     t3 = time.time()
     with st.spinner("Gerando relatório didático..."):
         report = summarizer.summarize(text)
     t3_elapsed = time.time() - t3
+
+    # Não salva nem envia por e-mail um relatório que é só mensagem de erro.
+    if not report or report.startswith("Erro"):
+        st.error(f"Falha ao gerar o relatório: {report or 'sem conteúdo'}. "
+                 "Verifique a ANTHROPIC_API_KEY e a conexão de internet.")
+        return
 
     st.success(f"Relatório gerado! ({t3_elapsed:.1f}s)")
     with st.expander("Ver Relatório", expanded=True):
@@ -154,7 +161,7 @@ def process_file_and_generate_report(audio_path, subject):
     st.divider()
     m1, m2, m3 = st.columns(3)
     m1.metric("🎤 Transcrição", f"{t2_elapsed:.0f}s")
-    m2.metric("🤖 DeepSeek", f"{t3_elapsed:.0f}s")
+    m2.metric("🤖 Claude", f"{t3_elapsed:.0f}s")
     m3.metric("⏱️ Total", f"{total_elapsed:.0f}s")
 
     # Botões de download lado a lado
