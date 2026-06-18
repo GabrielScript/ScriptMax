@@ -25,8 +25,10 @@ class Summarizer:
         self.client = anthropic.Anthropic(api_key=api_key) if api_key else None
 
     # Tamanho-alvo de cada bloco da transcrição (em caracteres) na geração em
-    # múltiplas passagens. ~6000 chars ≈ ~1500 palavras de fala por bloco.
-    CHUNK_CHARS = 6000
+    # múltiplas passagens. ~15000 chars ≈ ~3700 palavras de fala por bloco.
+    # Bloco grande = menos partes geradas = relatório final mais enxuto.
+    # Áudios pequenos/médios cabem numa passagem única.
+    CHUNK_CHARS = 15000
 
     def summarize(self, transcription_text):
         """Gera um relatório IMENSO via geração em múltiplas passagens (chunking).
