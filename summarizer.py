@@ -114,7 +114,14 @@ Esta é a **PARTE {part} de {total}** de uma transcrição longa, dividida em bl
         prompt = f"""
 Você é um especialista em educação estruturada, elaboração de atas executivas e formatação avançada de conteúdos complexos.
 
-Abaixo está a transcrição (gerada por IA) de uma gravação. Sua tarefa é analisar o contexto dessa gravação e gerar um relatório organizando perfeitamente a transcrição de forma fluida. O relatório deve ser EXTREMAMENTE extenso e detalhado.
+Abaixo está a transcrição (gerada por IA) de uma gravação. Sua tarefa é analisar o contexto dessa gravação e gerar um relatório organizando perfeitamente a transcrição de forma fluida.
+
+## PRINCÍPIO CENTRAL: DENSO, NÃO LONGO
+O relatório deve ser COMPLETO, mas NÃO inflado. Cubra TODOS os pontos abordados no áudio, porém:
+- **Cada informação aparece UMA única vez.** Proibido repetir a mesma ideia, conceito ou dado em seções diferentes ou reformulado com outras palavras.
+- **Sem enchimento.** Nada de introduções genéricas, frases de transição vazias, recapitulações ou conclusões que apenas repetem o que já foi dito.
+- **Prefira o conteúdo à extensão.** Use o número de palavras necessário para registrar o ponto com precisão — nem mais, nem menos. Um relatório curto que cobre tudo é melhor que um longo e redundante.
+- **Nada de "água".** Se uma frase não acrescenta informação nova, remova-a.
 {context_note}
 ## PASSO 1: ANÁLISE DE CONTEXTO
 Antes de iniciar o relatório, identifique sobre o que a transcrição se trata e escolha UMA das duas abordagens abaixo:
@@ -140,6 +147,7 @@ Se o áudio for sobre ciências sociais, negócios, literatura, leis ou uma reun
 - Use **negrito** para destacar conceitos-chave, pessoas citadas, regras de negócio ou termos técnicos vitais.
 - Use > (blockquote) para citações diretas, regras universais, artigos de leis ou definições irrefutáveis.
 - NÃO omita detalhes cruciais ou conversas de rodapé que construíram a base lógica da decisão.
+- Mas TAMBÉM não invente, não estenda artificialmente e não reescreva o mesmo ponto de formas diferentes só para parecer mais completo.
 
 Transcrição Bruta:
 -------------------------
@@ -152,15 +160,16 @@ Por favor, forneça o relatório final bem estruturado em português, baseado na
             return "Erro: ANTHROPIC_API_KEY não configurada no .env."
 
         system_prompt = (
-            "Você é um assistente educacional especialista em criar resumos super "
-            "detalhados e didáticos. Quando o conteúdo envolve matemática, você SEMPRE "
-            "usa notação LaTeX para fórmulas, equações, matrizes e expressões "
-            "matemáticas. Use $...$ para inline e $$...$$ para blocos."
+            "Você é um assistente educacional especialista em criar relatórios "
+            "completos, densos e didáticos — cobrindo todos os pontos sem redundância "
+            "nem enchimento. Cada informação aparece uma única vez. Quando o conteúdo "
+            "envolve matemática, você SEMPRE usa notação LaTeX para fórmulas, equações, "
+            "matrizes e expressões matemáticas. Use $...$ para inline e $$...$$ para blocos."
         )
         try:
             response = self.client.messages.create(
                 model=self.MODEL,
-                max_tokens=8192,
+                max_tokens=4000,
                 temperature=0.3,
                 system=system_prompt,
                 messages=[{"role": "user", "content": prompt}],
