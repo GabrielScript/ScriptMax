@@ -3,7 +3,7 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 
 import markdown
-import anthropic
+from openai import OpenAI
 from dotenv import load_dotenv
 from fpdf import FPDF
 
@@ -12,17 +12,20 @@ load_dotenv()
 
 
 class Summarizer:
-    # Claude Haiku 4.5 — rápido, forte em PT/LaTeX e mantém o conteúdo na
-    # Anthropic (sem trafegar dados sigilosos da clínica para terceiros).
-    MODEL = "claude-haiku-4-5"
+    # DeepSeek V4 Flash — rápido e barato, forte em PT/LaTeX. API compatível
+    # com OpenAI (base_url apontando para a DeepSeek).
+    MODEL = "deepseek-v4-flash"
+    BASE_URL = "https://api.deepseek.com"
 
     def __init__(self):
-        api_key = os.getenv("ANTHROPIC_API_KEY")
+        api_key = os.getenv("DEEPSEEK_API_KEY")
         if not api_key:
-            print("WARNING: ANTHROPIC_API_KEY not found in .env")
+            print("WARNING: DEEPSEEK_API_KEY not found in .env")
 
         # Cliente reaproveitado entre threads (httpx é thread-safe).
-        self.client = anthropic.Anthropic(api_key=api_key) if api_key else None
+        self.client = (
+            OpenAI(api_key=api_key, base_url=self.BASE_URL) if api_key else None
+        )
 
     # Tamanho-alvo de cada bloco da transcrição (em caracteres) na geração em
     # múltiplas passagens. ~15000 chars ≈ ~3700 palavras de fala por bloco.
@@ -59,7 +62,7 @@ class Summarizer:
 
         def _work(idx):
             i = idx + 1
-            print(f"  → Enviando parte {i}/{total} para o Claude...")
+            print(f"  → Enviando parte {i}/{total} para o DeepSeek...")
             section = self._summarize_chunk(chunks[idx], part=i, total=total)
             if section and not section.startswith("Erro"):
                 parts[idx] = section
@@ -159,7 +162,7 @@ Transcrição Bruta:
 Por favor, forneça o relatório final bem estruturado em português, baseado na Abordagem que melhor se adequar ao texto acima.
 """
         if self.client is None:
-            return "Erro: ANTHROPIC_API_KEY não configurada no .env."
+            return "Erro: DEEPSEEK_API_KEY não configurada no .env."
 
         system_prompt = (
             "Você é um assistente educacional especialista em criar relatórios "
@@ -169,20 +172,22 @@ Por favor, forneça o relatório final bem estruturado em português, baseado na
             "matrizes e expressões matemáticas. Use $...$ para inline e $$...$$ para blocos."
         )
         try:
-            response = self.client.messages.create(
+            response = self.client.chat.completions.create(
                 model=self.MODEL,
                 max_tokens=4000,
                 temperature=0.3,
-                system=system_prompt,
-                messages=[{"role": "user", "content": prompt}],
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt},
+                ],
             )
-            text_out = next((b.text for b in response.content if b.type == "text"), "")
+            text_out = response.choices[0].message.content or ""
             if not text_out.strip():
-                reason = getattr(response, "stop_reason", None) or "resposta vazia"
-                return f"Erro: o modelo não retornou conteúdo (stop_reason={reason})."
+                reason = getattr(response.choices[0], "finish_reason", None) or "resposta vazia"
+                return f"Erro: o modelo não retornou conteúdo (finish_reason={reason})."
             return text_out
         except Exception as e:
-            print(f"Erro ao acessar a API da Anthropic: {e}")
+            print(f"Erro ao acessar a API da DeepSeek: {e}")
             return f"Erro ao gerar resumo: {e}"
 
     def generate_html_report(self, report_text, output_filename="relatorio_aula.html"):
@@ -480,7 +485,7 @@ Por favor, forneça o relatório final bem estruturado em português, baseado na
     </div>
 
     <div class="footer">
-        <p>Gerado por MaxClass PDF Generator — Powered by Claude & MathJax</p>
+        <p>Gerado por MaxClass PDF Generator — Powered by DeepSeek & MathJax</p>
     </div>
 </body>
 </html>"""

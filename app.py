@@ -142,7 +142,7 @@ def process_file_and_generate_report(audio_path, subject):
     # Não salva nem envia por e-mail um relatório que é só mensagem de erro.
     if not report or report.startswith("Erro"):
         st.error(f"Falha ao gerar o relatório: {report or 'sem conteúdo'}. "
-                 "Verifique a ANTHROPIC_API_KEY e a conexão de internet.")
+                 "Verifique a DEEPSEEK_API_KEY e a conexão de internet.")
         return
 
     st.success(f"Relatório gerado! ({t3_elapsed:.1f}s)")
