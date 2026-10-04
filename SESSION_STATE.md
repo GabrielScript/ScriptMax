@@ -100,18 +100,27 @@ Windows, e `MSYS_NO_PATHCONV=1` quebra o wrapper do gcloud. Comandos de billing 
 Decisão do usuário: **manter o DeepSeek**. Ficou avaliada e não implementada a opção de um modo híbrido: modelo
 grátis da Groq com o DeepSeek como reserva.
 
+## Sessão de 2026-10-04 (madrugada → 19h40): verificações
+
+- Tráfego: 100% na `scriptmax-00002-hjz`, HTTP 200.
+- MCP do GitHub conectado (leu os commits até `5fc1a5e`).
+- **Teste real em produção via API:** 5 min da aula "Algebra Linear (Aula 01)", categoria Acadêmico, pasta Testes,
+  com e-mail. Groq, DeepSeek, PDF e e-mail OK em 32 s. Ou seja, as chaves novas do DeepSeek e do Gmail funcionam.
+  Gerou o relatório "Teste producao chaves novas (pode apagar)".
+- **`resolveja-jp-8347` excluído** (`DELETE_REQUESTED`). Dá para desfazer por ~30 dias com
+  `gcloud projects undelete resolveja-jp-8347`.
+- **Pasta antiga do OneDrive apagada.** Ela estava travada por 6 processos órfãos que tinham a pasta como diretório
+  de trabalho: servidores MCP (googlemaps e mongodb) de sessões antigas do Claude e um `python3` de plugin. O usuário
+  autorizou, e eles e mais 29 `node.exe` órfãos de 2 e 3/out foram encerrados.
+
 ## Pendências
 
-Feitas em 2026-10-04 (noite): disco do Docker no D:, vhdx antigo apagado, PAT do GitHub novo e chaves rotacionadas.
+1. **Testar no app publicado** com microfone real e com áudio do PC, inclusive pelo celular (o caminho de upload,
+   DeepSeek e e-mail já foi validado).
+2. Commit do `SESSION_STATE.md`, que o usuário faz.
 
-1. **Testar no app publicado** com microfone real e com áudio do PC, inclusive pelo celular. Isso também valida em produção o DeepSeek e o e-mail com as chaves novas.
-2. **Confirmar o MCP do GitHub** depois de reiniciar o Claude Code, com o Docker de pé.
-3. O relatório de teste "Teste Cloud Run (pode apagar)", na pasta Testes, pode ser apagado pela interface.
-4. **Apagar a pasta vazia antiga** `C:\Users\gabri\OneDrive\Área de Trabalho\Aplicativos\ScriptMax` e esvaziar a
-   lixeira do OneDrive.
-5. **Decidir o destino do `resolveja-jp-8347`**, que ficou sem faturamento.
-6. Apagar a pasta vazia `D:\tmp_keys`.
-7. Commit do `SESSION_STATE.md`, que o usuário faz.
+Feitos pelo usuário em 2026-10-04: os 2 relatórios de teste apagados pela interface (o bucket foi conferido), lixeira
+do OneDrive esvaziada e `D:\tmp_keys` apagada.
 
 ## Limitações conhecidas
 
