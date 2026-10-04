@@ -25,7 +25,7 @@
 
     <section id="login-section" class="panel narrow" aria-labelledby="login-title" hidden>
       <h2 id="login-title" class="section-title"><span class="section-number">00</span> Entrar</h2>
-      <form id="login-form" novalidate>
+      <form id="login-form" method="post" novalidate>
         <div class="field">
           <label for="login-token">Token de acesso</label>
           <input id="login-token" name="token" type="password" autocomplete="current-password"
@@ -40,7 +40,7 @@
       <section class="panel" aria-labelledby="new-title">
         <h2 id="new-title" class="section-title"><span class="section-number">01</span> Novo relatório</h2>
 
-        <form id="details-form" class="details" novalidate>
+        <form id="details-form" class="details" method="post" novalidate>
           <fieldset class="category-fieldset">
             <legend>Categoria <span aria-hidden="true">*</span></legend>
             <div id="category-options" class="category-grid"></div>

@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from scriptmax.server import create_app
+from scriptmax.server import STATIC_DIR, create_app
 from tests.conftest import build_services
 
 LOCAL = {"base_url": "http://127.0.0.1:8000", "client": ("127.0.0.1", 50000)}
@@ -97,7 +97,16 @@ def test_security_headers_present(local_client: TestClient) -> None:
     assert response.status_code == 200
     assert "default-src 'self'" in response.headers["content-security-policy"]
     assert response.headers["x-frame-options"] == "DENY"
+    assert response.headers["strict-transport-security"] == "max-age=31536000; includeSubDomains"
     assert "x-request-id" in response.headers
+
+
+def test_forms_never_submit_natively_via_get() -> None:
+    # Sem JS (ou antes do módulo carregar), um <form> sem method faria GET /?token=... e o
+    # token iria parar no log de requisições do Cloud Run e no histórico do navegador.
+    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+    assert '<form id="login-form" method="post"' in html
+    assert '<form id="details-form" class="details" method="post"' in html
 
 
 def test_without_token_proxied_requests_are_rejected(tmp_path: Path) -> None:

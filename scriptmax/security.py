@@ -29,6 +29,8 @@ APP_CSP = (
     "form-action 'self'; frame-ancestors 'none'"
 )
 BASE_SECURITY_HEADERS = {
+    # Navegadores ignoram HSTS recebido por HTTP (RFC 6797 §8.1): inofensivo no uso local.
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "no-referrer",
     "X-Frame-Options": "DENY",
