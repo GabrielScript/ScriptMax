@@ -1,9 +1,16 @@
-streamlit>=1.30.0
-faster-whisper>=1.0.0
-numpy>=1.24.0
-openai>=1.30.0
-fpdf>=1.7.2
-markdown>=3.5.2
-playwright>=1.40.0
-streamlit-mic-recorder>=0.0.8
-python-dotenv>=1.0.0
+# Versões fixadas (testadas em Python 3.12). Requer também: ffmpeg no PATH
+# e `python -m playwright install chromium` para o PDF com fórmulas.
+fastapi==0.136.3
+uvicorn==0.47.0
+python-multipart==0.0.29
+openai==2.38.0
+numpy==1.26.4
+Markdown==3.10.2
+nh3==0.3.7
+playwright==1.60.0
+fpdf2==2.8.7
+python-dotenv==1.2.2
+
+# Desenvolvimento
+pytest==9.0.3
+httpx==0.28.1

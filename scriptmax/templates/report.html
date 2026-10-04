@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{TITLE}}</title>
+<script>{{MATHJAX_CONFIG}}</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --bg: #f4ecdc; --card: #fbf6ec; --text: #1f1a13; --muted: #3d352a;
+    --accent: #c4321e; --border: #d8cbb2; --quote: #efe4cc;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); line-height: 1.75; font-size: 17px;
+         font-family: "Segoe UI", system-ui, -apple-system, sans-serif; }
+  header { max-width: 860px; margin: 0 auto; padding: 3rem 1.5rem 1.5rem; border-bottom: 3px double var(--text); }
+  header h1 { margin: 0; font: italic 600 clamp(2rem, 5vw, 2.8rem)/1.1 var(--serif); border: 0; padding: 0; }
+  header p { margin: .75rem 0 0; color: var(--accent); font-size: .8rem; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; }
+  main { max-width: 860px; margin: 0 auto 2rem; padding: 1rem 1.5rem 2rem; }
+  main > h1:first-child { display: none; }
+  h1, h2, h3, h4 { line-height: 1.25; margin: 2.2rem 0 .8rem; font-family: var(--serif); }
+  h1 { font-size: 1.9rem; border-bottom: 1px solid var(--border); padding-bottom: .4rem; }
+  h2 { font-size: 1.5rem; }
+  h2::before { content: "§ "; color: var(--accent); }
+  h3 { font-size: 1.2rem; font-style: italic; }
+  p, li { color: var(--muted); }
+  strong { color: var(--text); }
+  a { color: var(--accent); }
+  blockquote { margin: 1.5rem 0; padding: .75rem 1.25rem; border-left: 4px solid var(--accent);
+               background: var(--quote); border-radius: 0 8px 8px 0; }
+  blockquote p { color: var(--text); }
+  code { font-family: ui-monospace, Consolas, monospace; background: var(--quote); padding: 2px 6px; border-radius: 4px; }
+  pre { background: var(--card); border: 1px solid var(--border); padding: 1rem; border-radius: 8px; overflow-x: auto; }
+  th { background: var(--quote); text-align: left; }
+  pre code { padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 1.5rem 0; display: block; overflow-x: auto; }
+  th, td { border: 1px solid var(--border); padding: .6rem .9rem; }
+  hr { border: 0; border-top: 1px solid var(--border); margin: 2rem 0; }
+  mjx-container[display="true"] { overflow-x: auto; overflow-y: hidden; padding: .5rem 0; }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; padding: 0 1rem 2rem; }
+  @media (max-width: 640px) { header { padding-top: 2rem; } main { padding: .5rem 1rem 1.5rem; } }
+  @media print {
+    :root { --bg: #fff; --card: #fff; --quote: #f3eee4; }
+    body { font-size: 11pt; }
+    header { padding-top: 0; }
+    h1, h2, h3 { break-after: avoid; }
+    blockquote, pre, table, mjx-container { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>{{TITLE}}</h1>
+  <p>{{SUBTITLE}}</p>
+</header>
+<main>
+{{BODY}}
+</main>
+<footer><p>Gerado pelo ScriptMax — transcrição automática revisada por IA. Confira fórmulas e números com o material da aula.</p></footer>
+</body>
+</html>

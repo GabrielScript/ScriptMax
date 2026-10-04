@@ -1,67 +1,71 @@
-# MaxClass PDF Generator (ScriptMax) 🎓🎤
+# ScriptMax
 
-Uma aplicação web construída com **Streamlit** que utiliza Fast-Whisper para transcrever aulas gravadas ou enviadas (MP3, WAV, etc.), melhorar a qualidade do áudio e gerar resumos e apostilas detalhadas automaticamente usando o modelo **DeepSeek**.
+Grave (microfone, áudio do PC ou os dois) ou anexe um áudio. O ScriptMax transcreve com **Whisper large-v3 (Groq)**,
+gera um relatório com **DeepSeek** seguindo instruções específicas da categoria e arquiva o PDF em pastas.
 
-A plataforma suporta perfeitamente aulas de exatas (Matemática, Física) renderizando equações complexas via LaTeX e MathJax.
+Sem GPU, sem Kaggle: tudo roda no seu PC e as partes pesadas são APIs baratas.
 
-## ✨ Funcionalidades
+## Categorias
 
-- **🎙️ Gravação ao Vivo ou Upload**: Grave sua aula diretamente no navegador ou envie um arquivo de áudio (`.mp3`, `.wav`, `.m4a`, etc.).
-- **🔧 Melhoramento de Áudio (Denoising)**: Pipeline avançado de áudio que aplica filtro passa-banda, redução de ruído espectral e normalização para garantir a melhor qualidade antes da transcrição.
-- **📝 Transcrição Ultrarrápida**: Utiliza `faster-whisper` otimizado para CPU, ignorando silêncios (VAD) e processando em lote para máxima velocidade.
-- **🤖 Summarização Didática (DeepSeek)**: A IA estrutura o conhecimento em tópicos, conceitos-chave e exemplos focados em aprendizado.
-- **📐 Suporte Avançado a Fórmulas**: Renderização perfeita de expressões matemáticas em LaTeX através de relatórios HTML gerados dinamicamente com MathJax.
-- **📁 Organização Automática**: Todos os relatórios são salvos e organizados automaticamente em pastas baseadas no assunto da aula.
-- **📄 Exportação Dual**: Baixe o resultado em HTML interativo (ideal para exatas) ou PDF de texto simples.
+| Categoria | O relatório traz |
+|---|---|
+| Desenvolvimento pessoal / Psicologia | ideia central, conceitos, mecanismos, ferramentas passo a passo, perguntas de reflexão, plano de ação |
+| Filmes / Séries / Documentários | ficha, sinopse, desenvolvimento, personagens, fatos e argumentos, temas, falas marcantes (com aviso de spoiler) |
+| Acadêmico / Conhecimento | apostila; detecta exatas e usa LaTeX; "pontos de atenção para prova" e glossário |
+| Trabalho | reunião → resumo executivo, decisões, itens de ação; treinamento → procedimentos e checklist |
 
-## 🚀 Como Executar
+## Instalação
 
-### 1. Pré-requisitos
-- Python 3.9+
-- [FFmpeg](https://ffmpeg.org/download.html) (necessário para processamento de áudio pelo Whisper). Certifique-se de que o FFmpeg está no seu `PATH` (variáveis de ambiente do Windows).
-- Uma chave de API (DeepSeek ou OpenAI compatível).
+Requisitos: Python 3.12, [ffmpeg](https://ffmpeg.org) no PATH (`winget install Gyan.FFmpeg`).
 
-### 2. Instalação
-
-Clone o repositório e instale as dependências:
-
-```bash
-pip install -r requirements.txt
-```
-
-### 3. Configuração da API
-
-Defina sua chave de API nas variáveis de ambiente do seu sistema antes de rodar o aplicativo.
-No Windows (PowerShell):
 ```powershell
-$env:DEEPSEEK_API_KEY="sua_chave_aqui"
+python -m pip install -r requirements.txt
+python -m playwright install chromium
+copy .env.example .env   # preencha GROQ_API_KEY e DEEPSEEK_API_KEY
+python -m scriptmax       # abre em http://127.0.0.1:8000
 ```
 
-*Obs: O arquivo `summarizer.py` atualmente busca a chave `DEEPSEEK_API_KEY` por padrão.*
+## Como funciona
 
-### 4. Iniciando a aplicação
+1. **Áudio** → ffmpeg normaliza para mono 16 kHz e corta blocos de ~10 min **no silêncio** (limite de 25 MB da Groq).
+2. **Transcrição** → Groq `whisper-large-v3`, com o fim do bloco anterior como contexto. Segmentos de silêncio/alucinação
+   são descartados com os limiares do próprio Whisper. Cada bloco fica em cache: falhar no meio não cobra de novo.
+3. **Relatório** → DeepSeek com prompt da categoria (modo *thinking* desligado; prefixo fixo aproveita o cache da API).
+   Trechos cortados por limite de tamanho são continuados; trechos que falham ficam marcados e podem ser **regerados**
+   sem transcrever de novo.
+4. **Saída** → HTML sanitizado com MathJax + PDF via Chromium, copiado para
+   `data/biblioteca/<Categoria>/<Pasta>/<Subpasta>/`.
 
-Execute o comando do Streamlit na pasta do projeto:
+## Custos (outubro/2026)
 
-```bash
-streamlit run app.py
+| Etapa | Preço | Aula de 90 min |
+|---|---|---|
+| Groq whisper-large-v3 | US$ 0,111/h (grátis até 8 h/dia no plano free) | ~US$ 0,17 ou grátis |
+| DeepSeek flash | US$ 0,30/M entrada, 1,20/M saída (metade fora do pico) | ~US$ 0,03 |
+
+Para gastar menos: `TRANSCRIPTION_MODEL=whisper-large-v3-turbo` (US$ 0,04/h, um pouco menos preciso) e processe fora
+do horário de pico da DeepSeek (01–04h e 06–10h UTC são pico).
+
+## Gravar pelo celular
+
+O navegador só libera microfone em HTTPS. Defina `APP_TOKEN` (16+ caracteres) no `.env` e use um túnel:
+
+```powershell
+ngrok http 8000
 ```
 
-O aplicativo abrirá automaticamente no seu navegador padrão (`http://localhost:8501`).
+Abra o link `https://...ngrok-free.app` no celular e entre com o token. Sem `APP_TOKEN`, o app recusa qualquer acesso
+que não seja do próprio PC.
 
-## 📁 Estrutura do Projeto
+## Segurança
 
-- `app.py`: O frontend em Streamlit e orquestrador principal do pipeline.
-- `audio_recorder.py`: Lida com a gravação de áudio do microfone pelo navegador.
-- `audio_enhancer.py`: Pipeline de DSP (Digital Signal Processing) para diminuir o ruído do áudio.
-- `transcriber.py`: Integração com `faster-whisper` com otimizações de velocidade.
-- `summarizer.py`: Comunicação com a API do DeepSeek, com prompts embutidos e geração de HTML/PDF.
-- `relatorios/`: Diretório gerado automaticamente onde aulas processadas, organizadas por assunto, são salvas.
+- Chaves de API só no servidor; o navegador nunca as vê.
+- Login troca o token por cookie `httpOnly` + `SameSite=Strict`; tentativas limitadas (10 a cada 15 min).
+- CSP restritiva no app; relatórios abertos em *sandbox* (origem isolada) e com HTML sanitizado (nh3).
+- Destinatário de e-mail fixo no `.env`; nomes de pasta saneados contra path traversal.
 
-## ⚠️ Observações de Desempenho (Uso em CPU)
+## Testes
 
-A aplicação foi rigorosamente otimizada para rodar rápido mesmo **sem GPU**, utilizando:
-- VAD (Voice Activity Detection) para pular silêncios.
-- Decodificação Greedy (`beam_size=1`).
-- Processamento em lote (`batch_size=16`).
-- Multithreading (`cpu_threads=os.cpu_count()`).
+```powershell
+python -m pytest
+```
