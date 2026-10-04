@@ -19,7 +19,7 @@ Sem GPU, sem Kaggle: tudo roda no seu PC e as partes pesadas são APIs baratas.
 Requisitos: Python 3.12, [ffmpeg](https://ffmpeg.org) no PATH (`winget install Gyan.FFmpeg`).
 
 ```powershell
-python -m pip install -r requirements.txt
+python -m pip install -r requirements-dev.txt   # inclui pytest; produção usa só requirements.txt
 python -m playwright install chromium
 copy .env.example .env   # preencha GROQ_API_KEY e DEEPSEEK_API_KEY
 python -m scriptmax       # abre em http://127.0.0.1:8000

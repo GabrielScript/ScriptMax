@@ -1,9 +1,1 @@
-# Envia ao Cloud Build só o necessário para a imagem (ver Dockerfile).
-# Lista de permissão: ignora tudo e libera o que o build usa.
-/*
-!Dockerfile
-!requirements.txt
-!scriptmax/
-!static/
-!fonts/
-**/__pycache__/
+#!include:.dockerignore

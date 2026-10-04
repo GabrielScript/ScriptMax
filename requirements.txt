@@ -11,7 +11,3 @@ nh3==0.3.7
 playwright==1.60.0
 fpdf2==2.8.7
 python-dotenv==1.2.2
-
-# Desenvolvimento
-pytest==9.0.3
-httpx==0.28.1

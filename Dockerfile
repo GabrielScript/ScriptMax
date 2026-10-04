@@ -20,6 +20,8 @@ RUN pip install -r requirements.txt \
 COPY scriptmax ./scriptmax
 COPY static ./static
 COPY fonts ./fonts
+# Bytecode pré-compilado: PYTHONDONTWRITEBYTECODE impediria o cache em runtime (cold start mais lento).
+RUN python -m compileall -q scriptmax
 
 RUN useradd --create-home --uid 1000 app
 USER app

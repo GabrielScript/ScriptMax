@@ -1,15 +1,9 @@
 """Ponto de entrada: `python -m scriptmax`."""
 from __future__ import annotations
 
-import asyncio
 import logging
 import sys
-
-import uvicorn
-from fastapi import FastAPI
-from hypercorn.asyncio import serve as hypercorn_serve
-from hypercorn.config import Config as HypercornConfig
-from hypercorn.middleware import ProxyFixMiddleware
+from typing import TYPE_CHECKING
 
 from scriptmax.config import ConfigError, Settings, load_settings
 from scriptmax.emailer import EmailSender
@@ -21,6 +15,9 @@ from scriptmax.server import AppServices, create_app
 from scriptmax.storage import ReportStore
 from scriptmax.summarization import Summarizer
 from scriptmax.transcription import GroqTranscriber
+
+if TYPE_CHECKING:
+    from fastapi import FastAPI
 
 
 def build_services(settings: Settings) -> AppServices:
@@ -59,6 +56,8 @@ def main() -> int:
     if settings.behind_proxy:
         _serve_behind_proxy(app, settings)
     else:
+        import uvicorn
+
         # proxy_headers só confia em 127.0.0.1 (ex.: ngrok local) para obter o esquema https.
         uvicorn.run(app, host=settings.host, port=settings.port, proxy_headers=True, forwarded_allow_ips="127.0.0.1")
     return 0
@@ -68,10 +67,15 @@ def _serve_behind_proxy(app: FastAPI, settings: Settings) -> None:
     """Cloud Run: Hypercorn fala HTTP/2 em texto puro (h2c), o que remove o limite
     de 32 MB por requisição do HTTP/1; ProxyFix confia só no último salto do
     X-Forwarded-For/Proto, adicionado pelo front-end do Google."""
-    config = HypercornConfig()
+    import asyncio
+
+    from hypercorn.asyncio import serve
+    from hypercorn.config import Config
+    from hypercorn.middleware import ProxyFixMiddleware
+
+    config = Config()
     config.bind = [f"{settings.host}:{settings.port}"]
-    config.accesslog = None
-    asyncio.run(hypercorn_serve(ProxyFixMiddleware(app, mode="legacy", trusted_hops=1), config))
+    asyncio.run(serve(ProxyFixMiddleware(app, mode="legacy", trusted_hops=1), config))
 
 
 if __name__ == "__main__":

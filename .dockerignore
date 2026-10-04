@@ -1,5 +1,7 @@
 # Contexto mínimo do build (segredos, mídia e dados locais ficam de fora).
-*
+# Também usado pelo `gcloud run deploy --source` via .gcloudignore.
+# `/*` (e não `*`): no gcloud, `*` casaria em qualquer profundidade e excluiria o conteúdo das pastas liberadas.
+/*
 !Dockerfile
 !requirements.txt
 !scriptmax/
