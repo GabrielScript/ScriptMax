@@ -43,3 +43,6 @@ full_pdf.txt
 .idea/
 .DS_Store
 Thumbs.db
+
+# Segredos
+TESTSPRITE_API_KEY.txt

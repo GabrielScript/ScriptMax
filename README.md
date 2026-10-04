@@ -57,6 +57,30 @@ ngrok http 8000
 Abra o link `https://...ngrok-free.app` no celular e entre com o token. Sem `APP_TOKEN`, o app recusa qualquer acesso
 que não seja do próprio PC.
 
+## Deploy no Cloud Run
+
+Produção: projeto `scriptmax-app`, região `us-central1`, serviço `scriptmax`. Chaves e `APP_TOKEN` ficam no Secret
+Manager; relatórios e biblioteca no bucket `gs://scriptmax-app-data`, montado em `/data` (Cloud Storage FUSE).
+Com `BEHIND_PROXY=1` o app sobe no Hypercorn em HTTP/2 (h2c), o que libera uploads acima de 32 MB.
+
+Rode no PowerShell (o Git Bash converte `/data` em caminho do Windows):
+
+```powershell
+gcloud run deploy scriptmax --source . --project=scriptmax-app --region=us-central1 `
+  --service-account=scriptmax-run@scriptmax-app.iam.gserviceaccount.com --allow-unauthenticated `
+  --use-http2 --no-cpu-throttling --cpu=1 --memory=2Gi --min-instances=0 --max-instances=1 `
+  --timeout=3600 --execution-environment=gen2 `
+  "--add-volume=name=data,type=cloud-storage,bucket=scriptmax-app-data,mount-options=implicit-dirs" `
+  "--add-volume-mount=volume=data,mount-path=/data" `
+  "--set-secrets=GROQ_API_KEY=groq-api-key:latest,DEEPSEEK_API_KEY=deepseek-api-key:latest,EMAIL_PASSWORD=email-password:latest,APP_TOKEN=app-token:latest" `
+  --quiet
+```
+
+- `--no-cpu-throttling`: os jobs rodam em thread depois da resposta HTTP; sem isso a CPU congela.
+- `--max-instances=1`: o estado dos jobs fica em memória; mais de uma instância perderia o acompanhamento.
+- `EMAIL_USER`, `EMAIL_RECIPIENT` e `MAX_UPLOAD_MB=300` já estão no serviço e são mantidos em novos deploys.
+- Ver o token de login: `gcloud secrets versions access latest --secret=app-token --project=scriptmax-app`.
+
 ## Segurança
 
 - Chaves de API só no servidor; o navegador nunca as vê.

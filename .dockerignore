@@ -1,0 +1,8 @@
+# Contexto mínimo do build (segredos, mídia e dados locais ficam de fora).
+*
+!Dockerfile
+!requirements.txt
+!scriptmax/
+!static/
+!fonts/
+**/__pycache__/

@@ -40,6 +40,7 @@ class Settings:
     max_upload_bytes: int
     ffmpeg_path: str
     email: EmailSettings | None
+    behind_proxy: bool = False
 
     @property
     def reports_dir(self) -> Path:
@@ -116,4 +117,5 @@ def load_settings() -> Settings:
         max_upload_bytes=int(_env("MAX_UPLOAD_MB", "500") or "500") * 1024 * 1024,
         ffmpeg_path=_resolve_ffmpeg(),
         email=_load_email_settings(),
+        behind_proxy=(_env("BEHIND_PROXY", "") or "").lower() in {"1", "true", "yes"},
     )

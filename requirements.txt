@@ -2,6 +2,7 @@
 # e `python -m playwright install chromium` para o PDF com fórmulas.
 fastapi==0.136.3
 uvicorn==0.47.0
+hypercorn==0.18.0
 python-multipart==0.0.29
 openai==2.38.0
 numpy==1.26.4
