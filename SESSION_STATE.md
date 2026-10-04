@@ -8,10 +8,12 @@ O ScriptMax está em produção no Google Cloud Run. Desde 2026-10-03 a stack é
 transcrição na Groq com `whisper-large-v3` e relatórios no DeepSeek com `deepseek-flash`, que a API confirma ser o
 **DeepSeek-V4.1-Flash**.
 
-- **Link:** https://scriptmax-572877712489.us-central1.run.app. A revisão `scriptmax-00001-fcn` recebe 100% do tráfego.
+- **Link:** https://scriptmax-572877712489.us-central1.run.app. A revisão `scriptmax-00002-hjz` recebe 100% do tráfego
+  (criada só para carregar os segredos rotacionados; mesma imagem da `00001-fcn`).
 - **Login:** pelo `APP_TOKEN`, guardado no Secret Manager. Para ver:
   `gcloud secrets versions access latest --secret=app-token --project=scriptmax-app`
-- **Repositório:** https://github.com/GabrielScript/ScriptMax. Último commit: `eb2ce55`. Árvore limpa.
+- **Repositório:** https://github.com/GabrielScript/ScriptMax. Último commit: `eb2ce55`. Só o `SESSION_STATE.md` está fora de commit.
+  **Commit e push são feitos pelo usuário**, não pelo Claude.
 - **Testes:** 57 passando (`python -m pytest`).
 - **Local do projeto:** `D:\Projetos\ScriptMax`. Saiu do OneDrive nesta sessão porque o C: estava 100% cheio.
 
@@ -42,6 +44,25 @@ transcrição na Groq com `whisper-large-v3` e relatórios no DeepSeek com `deep
    `cloud-build-basics`, `google-cloud-storage-basics`, `google-cloud-storage-fuse` e `google-cloud-waf-cost-optimization`.
 7. **Migração para o D:** o projeto foi copiado e conferido (559 de 559 arquivos, 9,4 GB), e a cópia do OneDrive foi
    apagada. A memória do Claude foi copiada para a chave do novo caminho.
+
+## Sessão seguinte (2026-10-04, noite): manutenção
+1. **Chaves rotacionadas:** DeepSeek e senha de app do Gmail.
+   - Testadas antes de publicar: DeepSeek respondeu 200; login SMTP OK com e sem espaços.
+   - Versão 2 criada em `deepseek-api-key` e `email-password`, com a senha do Gmail gravada sem espaços.
+   - A versão 1 dos dois foi **desativada**, não destruída. O usuário já apagou as chaves antigas nos provedores.
+   - Nova revisão `scriptmax-00002-hjz`, criada com `--update-labels=secrets-rotated=2026-10-04`, sem rebuild. Responde 200 e não tem avisos no log.
+   - Ainda falta um relatório e um envio de e-mail reais em produção com as chaves novas.
+2. **Docker Desktop movido para `D:\DockerData`.**
+   - O motor tinha travado (`docker ps` não respondia) e foi preciso forçar o fechamento com `wsl --shutdown`.
+   - Depois a mudança deu certo. Os containers `alepha-db` e `terraiq-postgis` estão de pé.
+   - O C: passou de 9,1 para 19,7 GB livres.
+3. **Pastas apagadas no D:** `D:\Docker`, que estava vazia, e `D:\DockerDesktopWSL`, com o vhdx de 52,8 GB de abril. O D: ficou com 345 GB livres.
+4. **MCP do GitHub com token novo:** fine-grained, válido até 2027-01-02, com permissão de admin no ScriptMax.
+   - Trocado via `claude mcp remove` e `claude mcp add-json` no escopo user (`~/.claude.json`). A cópia no `~/.claude/settings.json` também foi atualizada, mas o Claude Code não lê esse arquivo.
+   - O servidor roda via Docker (`ghcr.io/github/github-mcp-server`), então só conecta com o Docker de pé.
+   - Precisa reiniciar o Claude Code para reconectar.
+   - Ficou a pasta vazia `D:\tmp_keys`, para o usuário apagar pelo Explorer.
+5. **Método de troca de segredos:** o usuário salva a chave num arquivo fora do repositório (ou no `.env`). O Claude testa a chave sem exibi-la, grava com `gcloud secrets versions add --data-file`, cria uma revisão nova e apaga o arquivo.
 
 ## Infraestrutura (GCP)
 
@@ -81,19 +102,16 @@ grátis da Groq com o DeepSeek como reserva.
 
 ## Pendências
 
-1. **Docker Desktop:** mover o disco para `D:\DockerData` em Settings → Resources → Advanced → Disk image location.
-   - A primeira tentativa, para `D:\Docker`, falhou com "já em uso". Essa pasta está vazia e pode ser apagada pelo Explorer.
-   - O armazenamento do Docker pode ter corrompido quando o C: encheu. Se acontecer, use Troubleshoot → Clean / Purge data.
-2. **`D:\DockerDesktopWSL`** tem um `docker_data.vhdx` antigo de **52,8 GB**, de abril de 2026. Avaliar se dá para
-   apagar, depois de confirmar que o Docker não usa mais esse caminho.
-3. **Apagar a pasta vazia antiga** `C:\Users\gabri\OneDrive\Área de Trabalho\Aplicativos\ScriptMax` e esvaziar a
-   lixeira do OneDrive, o que libera espaço na nuvem.
-4. **Token do MCP do GitHub inválido** (erro 401). Gerar um PAT novo; por enquanto o push é feito pelo `git`.
-5. **Rotacionar chaves:** DeepSeek e senha de app do Gmail, porque passaram pelo OneDrive. Depois, atualizar os
-   segredos com `gcloud secrets versions add <nome> --data-file=... --project=scriptmax-app`.
-6. **Testar no app publicado** com microfone real e com áudio do PC, inclusive pelo celular.
-7. O relatório de teste "Teste Cloud Run (pode apagar)", na pasta Testes, pode ser apagado pela interface.
-8. **Decidir o destino do `resolveja-jp-8347`**, que ficou sem faturamento.
+Feitas em 2026-10-04 (noite): disco do Docker no D:, vhdx antigo apagado, PAT do GitHub novo e chaves rotacionadas.
+
+1. **Testar no app publicado** com microfone real e com áudio do PC, inclusive pelo celular. Isso também valida em produção o DeepSeek e o e-mail com as chaves novas.
+2. **Confirmar o MCP do GitHub** depois de reiniciar o Claude Code, com o Docker de pé.
+3. O relatório de teste "Teste Cloud Run (pode apagar)", na pasta Testes, pode ser apagado pela interface.
+4. **Apagar a pasta vazia antiga** `C:\Users\gabri\OneDrive\Área de Trabalho\Aplicativos\ScriptMax` e esvaziar a
+   lixeira do OneDrive.
+5. **Decidir o destino do `resolveja-jp-8347`**, que ficou sem faturamento.
+6. Apagar a pasta vazia `D:\tmp_keys`.
+7. Commit do `SESSION_STATE.md`, que o usuário faz.
 
 ## Limitações conhecidas
 
