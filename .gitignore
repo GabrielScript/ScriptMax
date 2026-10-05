@@ -46,3 +46,5 @@ Thumbs.db
 
 # Segredos
 TESTSPRITE_API_KEY.txt
+testsprite_tests/tmp/
+testsprite_tests/tmp/config.json

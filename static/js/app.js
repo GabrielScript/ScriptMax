@@ -255,6 +255,8 @@ async function regenerateReport(report) {
     setStatus('library-status', `Regerando “${report.subject}”.`);
   } catch (error) {
     setStatus('library-status', error.message);
+    // 404: o relatório foi apagado em outra aba/aparelho; tira-o da lista.
+    if (error.status === 404) refreshLibrary();
   }
 }
 
@@ -279,6 +281,14 @@ async function onMoveSubmit(event) {
   try {
     await api.moveReport(reportBeingMoved.id, byId('move-category').value, byId('move-folder').value.trim());
   } catch (error) {
+    if (error.status === 404) {
+      // Apagado em outra aba/aparelho: não há mais o que mover.
+      dialog.close();
+      setStatus('library-status', error.message);
+      reportBeingMoved = null;
+      refreshLibrary();
+      return;
+    }
     byId('move-error').textContent = error.message;
     return;
   }
