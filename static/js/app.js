@@ -67,7 +67,6 @@ function startApp() {
   const { config } = state;
   byId('app').hidden = false;
   renderCategories(config.categories);
-  byId('email-field').hidden = !config.email_enabled;
   byId('max-upload').textContent = String(config.max_upload_mb);
   byId('library-dir').textContent = config.library_dir;
   byId('open-library').hidden = !config.can_open_library;
@@ -186,7 +185,7 @@ function readDetails() {
     subjectInput.focus();
     return null;
   }
-  return { subject, category, folder: byId('folder').value.trim(), sendEmail: byId('send-email').checked };
+  return { subject, category, folder: byId('folder').value.trim() };
 }
 
 // ---------- Envio ----------
@@ -209,7 +208,7 @@ async function submitAudio(items) {
       progress.value = 0;
       try {
         const job = await uploadAudio({
-          fields: { subject, category: details.category, folder: details.folder, send_email: String(details.sendEmail) },
+          fields: { subject, category: details.category, folder: details.folder },
           file: item.file,
           filename: item.filename,
           onProgress: (fraction) => { progress.value = fraction; },

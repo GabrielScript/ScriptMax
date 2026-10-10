@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import time
 from pathlib import Path
 
@@ -75,6 +76,24 @@ def test_tech_category_goes_to_its_library_folder(local_client: TestClient, tmp_
     assert report["category"] == "tech"
     assert report["library_pdf"].startswith("Tech/Kubernetes/")
     assert "tech" in {category["id"] for category in local_client.get("/api/config").json()["categories"]}
+
+
+@pytest.mark.parametrize("email_enabled", [True, False])
+def test_upload_sends_email_automatically_when_configured(
+    tmp_path: Path, fake_pdf: None, monkeypatch: pytest.MonkeyPatch, email_enabled: bool
+) -> None:
+    services = dataclasses.replace(build_services(tmp_path), email_enabled=email_enabled)
+    requests = []
+    original_submit = services.jobs.submit_process
+
+    def spy_submit(request):
+        requests.append(request)
+        return original_submit(request)
+
+    monkeypatch.setattr(services.jobs, "submit_process", spy_submit)
+    with TestClient(create_app(services), **LOCAL) as client:
+        assert upload(client).status_code == 202
+    assert requests[0].send_email is email_enabled
 
 
 def test_rejects_bad_input(local_client: TestClient) -> None:

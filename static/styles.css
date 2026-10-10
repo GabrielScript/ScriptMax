@@ -143,8 +143,6 @@ code { font-family: var(--font-mono); font-size: .82em; overflow-wrap: anywhere;
 
 .details { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 1.5rem 2rem; }
 .details .error { grid-column: 1 / -1; }
-.checkbox-field { display: flex; align-items: center; gap: .6rem; }
-.checkbox-field input { width: 1.2rem; height: 1.2rem; accent-color: var(--rec); }
 
 /* Cor de cada categoria (classe, pois a CSP proíbe style inline) */
 .cat-desenvolvimento-pessoal { --cat: var(--cat-desenvolvimento-pessoal); }

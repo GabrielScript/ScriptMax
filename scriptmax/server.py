@@ -176,7 +176,6 @@ def _add_job_routes(router: APIRouter, services: AppServices) -> None:
         subject: Annotated[str, Form()],
         category: Annotated[Category, Form()],
         folder: Annotated[str, Form(max_length=300)] = "",
-        send_email: Annotated[bool, Form()] = False,
     ) -> JobView:
         clean_subject = clean_text(subject, MAX_SUBJECT_CHARS)
         if not clean_subject:
@@ -194,7 +193,7 @@ def _add_job_routes(router: APIRouter, services: AppServices) -> None:
         return services.jobs.submit_process(
             ProcessRequest(
                 audio_path=audio_path, source_name=source_name, subject=clean_subject, category=category,
-                folder=clean_folder, send_email=send_email and services.email_enabled,
+                folder=clean_folder, send_email=services.email_enabled,
             )
         )
 
