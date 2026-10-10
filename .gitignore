@@ -58,3 +58,8 @@ testsprite_tests/
 .claude/skills/dsh-error-handling/
 .claude/skills/python-design-patterns/
 .claude/skills/writing-skills/
+.claude/skills/google-cloud-waf-cost-optimization/
+.claude/skills/google-cloud-storage-fuse/
+.claude/skills/google-cloud-storage-basics/
+.claude/skills/cloud-run-basics/
+.claude/skills/cloud-build-basics/
