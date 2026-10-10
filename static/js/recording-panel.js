@@ -1,13 +1,16 @@
 // Console de gravação: botão REC, pausa, VU-meter, timer e revisão antes de enviar.
 
 import { byId, el, formatClock } from './dom.js';
-import { AudioRecorder, SOURCE, extensionFor, recordingSupport } from './recorder.js';
+import { RecordingBackup } from './recording-backup.js';
+import { AudioRecorder, SOURCE, TIMESLICE_MS, extensionFor, recordingSupport } from './recorder.js';
 
 const VU_SEGMENTS = 24;
 const WARM_FROM = 16;
 const HOT_FROM = 21;
 const SILENCE_WARNING_MS = 6000;
 const SIGNAL_THRESHOLD = 0.02;
+// Cópia sem escrita há mais que isso é de uma aba que morreu, não de outra aba gravando agora.
+const ORPHAN_AFTER_MS = 5 * TIMESLICE_MS;
 const SOURCE_HINTS = {
   [SOURCE.MIC]: 'Capta sua voz ou a sala (aulas presenciais).',
   [SOURCE.SYSTEM]: 'Chrome/Edge: escolha a aba ou a tela e marque “Compartilhar áudio”. Ideal para filmes e vídeos.',
@@ -46,6 +49,7 @@ export class RecordingPanel {
     this.#buildVu();
     this.#bindEvents();
     this.#applySupport();
+    this.#recoverInterrupted();
   }
 
   get hasUnsavedAudio() {
@@ -136,22 +140,50 @@ export class RecordingPanel {
     const result = await this.#recorder.stop();
     this.#setMode('idle');
     if (!result || result.blob.size === 0) {
+      result?.backup?.discard();
       this.#elements.state.textContent = 'Nada foi gravado.';
       return;
     }
-    const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
-    this.#take = {
+    this.#showTake({
       blob: result.blob,
-      filename: `gravacao-${stamp}.${extensionFor(result.blob.type)}`,
-      url: URL.createObjectURL(result.blob),
+      durationMs: result.durationMs,
+      recordedAt: new Date(),
+      discardBackup: () => result.backup?.discard(),
+    }, message);
+    this.#elements.submit.focus();
+  }
+
+  async #recoverInterrupted() {
+    if (this.#elements.start.disabled) return; // sem suporte a gravação, não há o que recuperar
+    let orphan;
+    try {
+      orphan = await RecordingBackup.findOrphan(ORPHAN_AFTER_MS);
+    } catch {
+      return; // IndexedDB indisponível (aba anônima, por exemplo): segue sem recuperação
+    }
+    if (!orphan || this.#take || this.#recorder.state !== 'inactive') return;
+    this.#showTake({
+      blob: orphan.blob,
+      durationMs: orphan.elapsedMs,
+      recordedAt: new Date(orphan.startedAt),
+      discardBackup: () => RecordingBackup.remove(orphan.id),
+    }, 'Gravação recuperada de uma sessão interrompida. Ouça, baixe ou processe. A duração pode não aparecer no player.');
+  }
+
+  #showTake({ blob, durationMs, recordedAt, discardBackup }, message) {
+    const stamp = recordedAt.toISOString().slice(0, 16).replace(/[:T]/g, '-');
+    this.#take = {
+      blob,
+      filename: `gravacao-${stamp}.${extensionFor(blob.type)}`,
+      url: URL.createObjectURL(blob),
+      discardBackup,
     };
-    this.#elements.timer.textContent = formatClock(result.durationMs);
+    this.#elements.timer.textContent = formatClock(durationMs);
     this.#elements.preview.src = this.#take.url;
     this.#elements.download.href = this.#take.url;
     this.#elements.download.download = this.#take.filename;
     this.#elements.review.hidden = false;
     this.#elements.state.textContent = message;
-    this.#elements.submit.focus();
   }
 
   async #submit() {
@@ -166,7 +198,10 @@ export class RecordingPanel {
   }
 
   #discard() {
-    if (this.#take) URL.revokeObjectURL(this.#take.url);
+    if (this.#take) {
+      URL.revokeObjectURL(this.#take.url);
+      Promise.resolve(this.#take.discardBackup()).catch(() => {});
+    }
     this.#take = null;
     this.#elements.review.hidden = true;
     this.#elements.preview.removeAttribute('src');

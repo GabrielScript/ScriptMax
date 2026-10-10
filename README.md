@@ -73,6 +73,12 @@ ngrok http 8000
 Abra o link `https://...ngrok-free.app` no celular e entre com o token. Sem `APP_TOKEN`, o app recusa qualquer acesso
 que não seja do próprio PC.
 
+**Tela bloqueada:** durante a gravação o app pede para a tela não apagar (Wake Lock). Se ela apagar mesmo assim, o
+Android pode encerrar a aba, coisa que um app nativo evita com *foreground service* e um site não consegue. Por isso cada
+pedaço de 1 s também vai para o IndexedDB do navegador (`static/js/recording-backup.js`): se a aba morrer, ao reabrir o
+site a gravação até ali aparece na revisão, pronta para ouvir, baixar ou processar. A cópia é apagada ao processar com
+sucesso ou ao descartar. No iPhone (Safari) a gravação para quando a tela bloqueia.
+
 ## Deploy no Cloud Run
 
 Produção: projeto `scriptmax-app`, região `us-central1`, serviço `scriptmax`. Chaves e `APP_TOKEN` ficam no Secret

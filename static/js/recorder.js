@@ -2,11 +2,13 @@
 // O áudio do PC usa getDisplayMedia: Chrome/Edge exigem "video: true" e o usuário
 // precisa marcar "Compartilhar áudio" na janela de escolha.
 
+import { RecordingBackup } from './recording-backup.js';
+
 export const SOURCE = Object.freeze({ MIC: 'mic', SYSTEM: 'system', BOTH: 'both' });
 
 const MIME_CANDIDATES = ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4', 'audio/webm'];
 const BITRATE = 64_000; // Opus 64 kbps: fala e trilha de filme com folga (~29 MB/h)
-const TIMESLICE_MS = 1000;
+export const TIMESLICE_MS = 1000;
 const LEVEL_GAIN = 4;
 
 export function recordingSupport() {
@@ -87,6 +89,7 @@ export class AudioRecorder {
   #accumulatedMs = 0;
   #levelFrame = 0;
   #wakeLock = null;
+  #backup = null;
   #onLevel;
   #onSourceEnded;
   #onVisibilityChange = () => this.#reacquireWakeLock();
@@ -118,8 +121,12 @@ export class AudioRecorder {
       throw explainCaptureError(error);
     }
     this.#chunks = [];
+    const backup = new RecordingBackup();
+    this.#backup = backup;
     this.#recorder.addEventListener('dataavailable', (event) => {
-      if (event.data.size > 0) this.#chunks.push(event.data);
+      if (event.data.size === 0) return;
+      this.#chunks.push(event.data);
+      backup.append(event.data, this.elapsedMs);
     });
     this.#recorder.start(TIMESLICE_MS);
     this.#accumulatedMs = 0;
@@ -150,13 +157,18 @@ export class AudioRecorder {
       await stopped;
     }
     const blob = new Blob(this.#chunks, { type: recorder.mimeType || 'audio/webm' });
+    const backup = this.#backup;
+    this.#backup = null;
     this.#chunks = [];
     this.#release();
-    return { blob, durationMs };
+    // A cópia de segurança fica até a gravação ser enviada ou descartada (quem decide é o painel).
+    return { blob, durationMs, backup };
   }
 
   cancel() {
     if (this.#recorder && this.#recorder.state !== 'inactive') this.#recorder.stop();
+    this.#backup?.discard();
+    this.#backup = null;
     this.#chunks = [];
     this.#release();
   }
