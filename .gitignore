@@ -49,6 +49,9 @@ TESTSPRITE_API_KEY.txt
 testsprite_tests/tmp/
 testsprite_tests/tmp/config.json
 
+# Notas de passagem de contexto entre sessões do Claude (só local)
+SESSION_STATE.md
+
 # Artefatos do TestSprite e skills locais (não versionar)
 testsprite_tests/
 .claude/skills/backend-patterns/
