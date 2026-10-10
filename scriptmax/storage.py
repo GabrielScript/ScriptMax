@@ -24,6 +24,7 @@ class ReportFile(str, Enum):
     MARKDOWN = "report.md"
     TRANSCRIPT_TEXT = "transcript.txt"
     TRANSCRIPT_JSON = "transcript.json"
+    MEMORY = "memory.md"
 
 
 class ReportNotFound(LookupError):
@@ -44,6 +45,7 @@ class ReportMeta:
     report_ready: bool = False
     complete: bool = True
     math_rendered: bool = True
+    memory_items: int = 0
     usage: dict[str, int] = field(default_factory=dict)
 
     @classmethod
@@ -52,7 +54,7 @@ class ReportMeta:
             id=uuid.uuid4().hex,
             subject=subject,
             source_name=source_name,
-            created_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            created_at=datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
             category=category,
             folder=folder,
         )
@@ -84,6 +86,9 @@ class ReportStore:
 
     def write_text(self, report_id: str, report_file: ReportFile, content: str) -> Path:
         return self._write(report_id, report_file.value, content)
+
+    def remove_file(self, report_id: str, report_file: ReportFile) -> None:
+        (self.directory(report_id) / report_file.value).unlink(missing_ok=True)
 
     def save_meta(self, meta: ReportMeta) -> None:
         self._write(meta.id, META_FILE, json.dumps(asdict(meta), ensure_ascii=False, indent=2))

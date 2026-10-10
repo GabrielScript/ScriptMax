@@ -48,3 +48,13 @@ Thumbs.db
 TESTSPRITE_API_KEY.txt
 testsprite_tests/tmp/
 testsprite_tests/tmp/config.json
+
+# Artefatos do TestSprite e skills locais (não versionar)
+testsprite_tests/
+.claude/skills/backend-patterns/
+.claude/skills/deepseek-cache-economy/
+.claude/skills/deepseek-chat/
+.claude/skills/dsh-ci-test-reliability/
+.claude/skills/dsh-error-handling/
+.claude/skills/python-design-patterns/
+.claude/skills/writing-skills/

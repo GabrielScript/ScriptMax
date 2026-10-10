@@ -3,7 +3,7 @@
 import { api, uploadAudio } from './api.js';
 import { byId, el, formatBytes, storage } from './dom.js';
 import { JobBoard } from './jobs.js';
-import { Library, foldersOf } from './library.js';
+import { Library, folderCounts } from './library.js';
 import { RecordingPanel } from './recording-panel.js';
 
 const LAST_CATEGORY_KEY = 'scriptmax.category';
@@ -13,6 +13,7 @@ const CATEGORY_BLURBS = {
   'filmes-series': 'Filmes, episódios e documentários',
   academico: 'Aulas e cursos — fórmulas em LaTeX automático',
   trabalho: 'Reuniões, calls e treinamentos',
+  tech: 'Stacks, ferramentas, arquitetura e tutoriais',
 };
 
 const state = { config: null, files: [], uploading: false };
@@ -116,17 +117,49 @@ function selectedCategory() {
 }
 
 function updateFolderSuggestions(categoryId) {
-  const options = foldersOf(library?.reports ?? [], categoryId).map((folder) => el('option', { value: folder }));
-  byId('folder-options').replaceChildren(...options);
+  const folders = [...folderCounts(library?.reports ?? [], categoryId).keys()];
+  byId('folder-options').replaceChildren(...folders.map((folder) => el('option', { value: folder })));
+}
+
+// O título sugere as pastas da categoria: escolher uma continua aquela sequência.
+function updateSubjectSuggestions() {
+  const counts = folderCounts(library?.reports ?? [], selectedCategory());
+  const describe = (total) => (total === 0 ? 'só subpastas' : `${total} ${total === 1 ? 'relatório' : 'relatórios'}`);
+  const options = [...counts].map(([folder, total]) => el('option', { value: folder, label: describe(total) }));
+  byId('subject-options').replaceChildren(...options);
+}
+
+function updateFormSuggestions() {
+  updateFolderSuggestions(selectedCategory());
+  updateSubjectSuggestions();
+}
+
+// Escolha no <datalist> chega como insertReplacementText (ou Event sem inputType em navegadores
+// antigos); digitação comum é insertText e não dispara nada, mesmo que coincida com uma pasta.
+function isSuggestionPick(event) {
+  return event.inputType === undefined || event.inputType === 'insertReplacementText';
+}
+
+function onSubjectInput(event) {
+  const input = event.target;
+  input.removeAttribute('aria-invalid');
+  if (!isSuggestionPick(event)) return;
+  const folder = input.value;
+  if (!folderCounts(library?.reports ?? [], selectedCategory()).has(folder)) return;
+  byId('folder').value = folder;
+  storage.set(LAST_FOLDER_KEY, folder);
+  input.value = '';
+  input.focus();
+  byId('subject-announcer').textContent = `Pasta “${folder}” selecionada. Digite o título do novo relatório.`;
 }
 
 function bindFormEvents() {
   byId('category-options').addEventListener('change', () => {
     storage.set(LAST_CATEGORY_KEY, selectedCategory());
-    updateFolderSuggestions(selectedCategory());
+    updateFormSuggestions();
   });
   byId('folder').addEventListener('change', (event) => storage.set(LAST_FOLDER_KEY, event.target.value));
-  byId('subject').addEventListener('input', (event) => event.target.removeAttribute('aria-invalid'));
+  byId('subject').addEventListener('input', onSubjectInput);
   byId('logout').addEventListener('click', async () => {
     await api.logout().catch(() => {});
     window.location.reload();
@@ -237,7 +270,7 @@ function setSelectedFiles(files) {
 async function refreshLibrary() {
   try {
     library.setReports(await api.reports());
-    updateFolderSuggestions(selectedCategory());
+    updateFormSuggestions();
   } catch (error) {
     setStatus('library-status', `Não foi possível carregar a biblioteca: ${error.message}`);
   }
@@ -247,6 +280,8 @@ function bindLibraryEvents() {
   byId('library-filter').addEventListener('input', (event) => library.setFilter(event.target.value));
   byId('open-library').addEventListener('click', () => api.openLibrary().catch((error) => setStatus('library-status', error.message)));
   byId('move-form').addEventListener('submit', onMoveSubmit);
+  // O diálogo troca as sugestões de pasta para a categoria do relatório; ao fechar, voltam às do formulário.
+  byId('move-dialog').addEventListener('close', () => updateFolderSuggestions(selectedCategory()));
 }
 
 async function regenerateReport(report) {

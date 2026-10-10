@@ -32,6 +32,14 @@ class FakeTranscriber:
 class FakeSummarizer:
     def __init__(self) -> None:
         self.requests: list[SummaryRequest] = []
+        self.card_calls: list[tuple[SummaryRequest, str, str]] = []
+        self.card_error: Exception | None = None
+
+    def write_memory_card(self, request: SummaryRequest, approach: str, report_markdown: str) -> str:
+        self.card_calls.append((request, approach, report_markdown))
+        if self.card_error is not None:
+            raise self.card_error
+        return f"FICHA de {request.subject}"
 
     def summarize(self, transcript_text: str, request: SummaryRequest, on_progress=None) -> SummaryResult:
         self.requests.append(request)

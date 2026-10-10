@@ -6,7 +6,14 @@ import openai
 import pytest
 
 from scriptmax.categories import Category
-from scriptmax.summarization import SummaryError, SummaryRequest, Summarizer, build_system_prompt, split_text
+from scriptmax.summarization import (
+    SummaryError,
+    SummaryRequest,
+    Summarizer,
+    build_part_instruction,
+    build_system_prompt,
+    split_text,
+)
 
 
 def completion(content: str, finish_reason: str = "stop"):
@@ -89,3 +96,78 @@ def test_all_parts_failing_raises() -> None:
 def test_system_prompt_is_identical_across_parts() -> None:
     assert build_system_prompt(Category.MEDIA, "") == build_system_prompt(Category.MEDIA, "")
     assert "spoilers" in build_system_prompt(Category.MEDIA, "")
+
+
+def test_tech_prompt_has_its_own_rules() -> None:
+    prompt = build_system_prompt(Category.TECH, "")
+    assert "CATEGORIA: TECH" in prompt
+    assert "Stack e ferramentas" in prompt
+
+
+MEMORY = "## MEMÓRIA DA PASTA\n### Item 1 — Aula 1 (2026-10-01)\nFICHA 1"
+CONNECTIONS = "Conexões com os anteriores"
+
+
+def test_memory_goes_last_in_system_prompt_and_empty_memory_changes_nothing() -> None:
+    base = build_system_prompt(Category.TECH, "")
+    with_memory = build_system_prompt(Category.TECH, "", MEMORY)
+
+    assert with_memory.startswith(base)
+    assert with_memory.endswith(MEMORY)
+    assert build_system_prompt(Category.TECH, "", "") == base
+
+
+def test_system_prompt_with_memory_is_identical_across_calls() -> None:
+    assert build_system_prompt(Category.ACADEMIC, "A", MEMORY) == build_system_prompt(Category.ACADEMIC, "A", MEMORY)
+
+
+def test_connections_instruction_only_on_last_part_and_only_with_memory() -> None:
+    assert CONNECTIONS not in build_part_instruction("t", 1, 3, has_memory=True)
+    assert CONNECTIONS in build_part_instruction("t", 3, 3, has_memory=True)
+    assert CONNECTIONS in build_part_instruction("t", 1, 1, has_memory=True)
+    assert CONNECTIONS not in build_part_instruction("t", 3, 3, has_memory=False)
+    assert build_part_instruction("t", 2, 3) == build_part_instruction("t", 2, 3, has_memory=False)
+
+
+def test_summarize_sends_memory_in_system_prompt_of_every_part() -> None:
+    client = ScriptedClient([completion("Parte um."), completion("Parte dois.")])
+    text = ("Frase longa de teste. " * 700).strip()
+
+    Summarizer(client, "m").summarize(text, SummaryRequest("Aula 2", Category.TECH, memory=MEMORY))
+
+    systems = [call["messages"][0]["content"] for call in client.calls]
+    assert len(systems) == 2 and systems[0] == systems[1]
+    assert systems[0].endswith(MEMORY)
+    users = sorted(call["messages"][1]["content"] for call in client.calls)
+    assert sum(CONNECTIONS in user for user in users) == 1
+    assert all("Aula 2" in user for user in users)
+
+
+def test_write_memory_card_reuses_system_prompt_and_puts_instruction_last() -> None:
+    client = ScriptedClient([completion("  Ficha pronta.  ")])
+    request = SummaryRequest("Aula 2", Category.TECH, memory=MEMORY)
+
+    card = Summarizer(client, "m").write_memory_card(request, "", "# Relatório\n\nTexto.")
+
+    assert card == "Ficha pronta."
+    call = client.calls[0]
+    assert call["messages"][0] == {"role": "system", "content": build_system_prompt(Category.TECH, "", MEMORY)}
+    user = call["messages"][1]["content"]
+    assert "# Relatório" in user and "Aula 2" in user
+    assert user.rstrip().endswith("Use apenas o que está no relatório; não invente.")
+    assert call["max_tokens"] < 8000
+
+
+def test_write_memory_card_accepts_unknown_academic_approach() -> None:
+    client = ScriptedClient([completion("Ficha.")])
+
+    Summarizer(client, "m").write_memory_card(SummaryRequest("Cálculo", Category.ACADEMIC), "", "# R")
+
+    assert "Conteúdo teórico detectado" in client.calls[0]["messages"][0]["content"]
+
+
+def test_write_memory_card_raises_on_api_error_and_on_empty_answer() -> None:
+    with pytest.raises(SummaryError):
+        Summarizer(ScriptedClient([api_error()]), "m").write_memory_card(SummaryRequest("t", Category.TECH), "", "# R")
+    with pytest.raises(SummaryError):
+        Summarizer(ScriptedClient([completion("   ")]), "m").write_memory_card(SummaryRequest("t", Category.TECH), "", "# R")

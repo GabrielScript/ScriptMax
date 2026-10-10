@@ -54,6 +54,21 @@ def test_library_publish_and_prune(tmp_path: Path) -> None:
     assert (library.root / "Trabalho").exists()  # pasta da categoria fica
 
 
+def test_library_publish_does_not_touch_file_metadata(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Cloud Storage FUSE (Cloud Run) recusa utime/chmod com EPERM, e no Linux o shutil.copy2 os chama
+    # (no Windows o copy2 é nativo e não reproduz). Por isso o publish só pode copiar conteúdo.
+    def deny(*_args: object, **_kwargs: object) -> None:
+        raise PermissionError(1, "Operation not permitted")
+
+    monkeypatch.setattr("shutil.copy2", deny)
+    monkeypatch.setattr("shutil.copystat", deny)
+    library = PdfLibrary(tmp_path / "bib")
+    source = tmp_path / "r.pdf"
+    source.write_bytes(b"%PDF")
+    relative = library.publish(source, library.target_path(Category.WORK, "", "ata", "[abc123]"))
+    assert (library.root / relative).read_bytes() == b"%PDF"
+
+
 def test_long_titles_are_shortened_to_fit_windows_max_path(tmp_path: Path) -> None:
     library = PdfLibrary(tmp_path / "bib")
     folder = "/".join(["Pasta com nome bem comprido " + str(n) for n in range(3)])

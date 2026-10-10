@@ -1,6 +1,7 @@
 # SESSION_STATE — ScriptMax
 
-Atualizado em 2026-10-04. Documento de passagem de contexto entre sessões.
+Atualizado em 2026-10-09. Documento de passagem de contexto entre sessões.
+**Leia primeiro a seção "Sessão de 2026-10-09" abaixo: há trabalho local não commitado e não publicado.**
 
 ## Resumo
 
@@ -12,10 +13,165 @@ transcrição na Groq com `whisper-large-v3` e relatórios no DeepSeek com `deep
   (criada só para carregar os segredos rotacionados; mesma imagem da `00001-fcn`).
 - **Login:** pelo `APP_TOKEN`, guardado no Secret Manager. Para ver:
   `gcloud secrets versions access latest --secret=app-token --project=scriptmax-app`
-- **Repositório:** https://github.com/GabrielScript/ScriptMax. Último commit: `eb2ce55`. Só o `SESSION_STATE.md` está fora de commit.
+- **Repositório:** https://github.com/GabrielScript/ScriptMax. Último commit: `31b53af`. As features de 2026-10-09 estão fora de commit.
   **Commit e push são feitos pelo usuário**, não pelo Claude.
-- **Testes:** 57 passando (`python -m pytest`).
+- **Testes:** 91 passando localmente em 2026-10-09 (`python -m pytest`; eram 57 em 2026-10-04). A produção ainda roda a versão antiga.
 - **Local do projeto:** `D:\Projetos\ScriptMax`. Saiu do OneDrive nesta sessão porque o C: estava 100% cheio.
+
+## Sessão de 2026-10-09 (noite): teste pelo celular e viabilidade comercial
+
+**Estado:** nenhum código mudou. Nada commitado, nada publicado. Servidor local **desligado**.
+
+### Testar pelo celular
+- **O link do Cloud Run funciona, mas roda a versão antiga** (sem Tech, sugestões no título e memória). Não houve deploy.
+  Commit e push não são pré-requisito do deploy: `gcloud run deploy --source .` sobe o código **local**. Publicar sem
+  commit deixa a produção à frente do GitHub.
+- **O usuário não quer usar o ngrok.** O caminho escolhido é a rede local:
+  - `$env:APP_TOKEN = '<16+ caracteres>'; $env:HOST = '0.0.0.0'; python -m scriptmax`
+  - No celular, na mesma rede: `http://192.168.0.2:8000` (IP do PC pelo cabo Ethernet em 2026-10-09; pode mudar).
+  - O `.env` **não tem `APP_TOKEN` nem `HOST`**. Sem token, o app recusa acesso que não seja local, e com `HOST` fora de
+    localhost ele nem sobe. Nesta sessão o token foi só variável de ambiente; nada foi gravado no `.env`.
+  - O firewall do Windows já libera o `python.exe` no perfil Público, que é o perfil da rede Ethernet.
+  - **Limitação:** em `http` (sem HTTPS) o navegador do celular bloqueia o microfone (`isSecureContext` falso em
+    `static/js/recorder.js`). Upload de arquivo, biblioteca, categorias e memória funcionam. A gravação ao vivo pelo
+    celular só funciona com HTTPS (ngrok ou Cloud Run).
+  - Cookie de sessão: `secure` só quando o esquema é https (`server.py:141`), então o login funciona em http na LAN.
+- Antes de subir, havia um `python -m scriptmax` antigo, sem token, na porta 8000. Ele foi encerrado após conferir que
+  `/api/jobs` estava vazio.
+- O servidor da LAN foi **morto pelo Claude Code por falta de memória** no PC (sessão ociosa). Não foi falha do app. Para
+  evitar isso: iniciar o Claude Code com `CLAUDE_CODE_DISABLE_BG_SHELL_PRESSURE_REAP=1`.
+
+### Por que testar localmente antes do deploy
+1. Os prompts da memória (`CARD_INSTRUCTION`, `CONNECTIONS_INSTRUCTION`) nunca foram vistos por um modelo real.
+2. A produção grava no bucket: fichas ruins ficariam salvas e entrariam no prompt dos itens seguintes da pasta.
+3. Sem commit não há ponto de volta no GitHub.
+
+### Viabilidade comercial (conversa, sem decisão)
+- O mercado existe: apps de aula para resumo (Coconote, TurboLearn, StudyFetch, Mindgrasp) e de reunião (Otter,
+  Fireflies, Granola, Plaud). Os preços não foram pesquisados nesta sessão.
+- **Diferenciais:**
+  - PT-BR nativo com prompts por categoria;
+  - memória entre relatórios da mesma pasta;
+  - PDF com LaTeX;
+  - biblioteca em pastas;
+  - custo de ~R$ 0,16 por aula.
+- **Riscos:**
+  - concorrência grátis (NotebookLM, ChatGPT, Gemini e recursos nativos do celular);
+  - distribuição;
+  - taxa de 15–30% das lojas;
+  - Apple recusa app que é só um site embrulhado;
+  - gravação longa com a tela bloqueada exige app nativo;
+  - LGPD e consentimento para gravar aulas;
+  - a categoria Filmes/Séries é zona cinzenta de direito autoral.
+- **Arquitetura atual é de usuário único** (`APP_TOKEN`, jobs em memória, `max-instances=1`). Um produto pago exige:
+  contas de usuário, banco de dados, fila de jobs, cotas e cobrança.
+- **Sugestão dada:**
+  - escolher um nicho (universitários de exatas e medicina, ou concurseiros);
+  - landing page e lista de espera;
+  - 10 a 20 usuários na versão web antes das lojas;
+  - plano grátis com 2–3 aulas por mês e pago entre R$ 19,90 e R$ 29,90.
+- Ficou oferecido e não feito: pesquisar os preços atuais dos concorrentes.
+
+## Sessão de 2026-10-09: categoria Tech, sugestões no título e memória entre relatórios
+
+**Estado:** tudo abaixo está só no disco local. Nada commitado, nada em produção (o Cloud Run segue com a versão antiga).
+Commit e push são do usuário. `scriptmax/library.py` e `tests/test_library_storage.py` já estavam modificados antes
+desta sessão e não são desta feature.
+
+### O que foi feito
+
+1. **Categoria "Tech"** (`Category.TECH = "tech"`, pasta `Tech/` na biblioteca): regras próprias em `categories.py`
+   (visão geral, arquitetura, tabela da stack com versão, passo a passo com código, trade-offs, armadilhas, glossário;
+   proíbe inventar comando/flag/versão). Card roxo na UI (claro e escuro); com 5 cards o último ocupa a linha inteira.
+2. **Sugestões no campo Título/assunto** (`<datalist id="subject-options">`): lista as pastas da categoria escolhida com a
+   contagem. Escolher uma pasta da lista preenche o campo Pasta, limpa o título e devolve o foco a ele; digitar à mão o nome
+   de uma pasta não faz nada. Detecta a escolha por `inputType === 'insertReplacementText'` (ou sem `inputType`).
+   `foldersOf` virou `folderCounts` em `static/js/library.js`. Fechar o diálogo "Mover" restaura as sugestões do formulário.
+3. **Memória entre relatórios** (abordagem 1: ficha por relatório). Novo `scriptmax/memory.py`; ficha em
+   `data/reports/<id>/memory.md`; `ReportMeta.memory_items`; `ReportStore.remove_file`; `SummaryRequest.memory`;
+   `Summarizer.write_memory_card`; `_collect_memory` e `_write_card` em `pipeline.py`. Regras:
+   - Sequência = **mesma categoria e pasta exata**, ordenada por `created_at`. Raiz da categoria (pasta vazia) não tem memória.
+   - Só entram itens anteriores com `report_ready`; irmão sem ficha ganha uma na hora (backfill, system sem memória).
+   - Memória no **prompt de sistema**, depois das regras da categoria, **do mais antigo ao mais novo**.
+   - Limite `MEMORY_MAX_CHARS` = 30 mil (~10 fichas, ~9 mil tokens): acima disso ficam as **mais novas** e o prompt avisa
+     quantas antigas foram omitidas. `MAX_CARD_CHARS` = 6 mil por ficha.
+   - A instrução "# Conexões com os anteriores" vai no `user` e **só no último trecho**; zero irmãos = sem instrução.
+   - A ficha do item atual é gerada logo após o relatório e **antes** da renderização, com o mesmo system prompt dos trechos.
+   - Falha da ficha ou da memória **nunca derruba o relatório**: aviso no status final. Regerar apaga a ficha velha antes.
+   - Subtítulo do PDF mostra "memória: N itens".
+4. **Skills do projeto** em `.claude/skills/`: `deepseek-cache-economy` (criada e testada), `dsh-error-handling` e
+   `dsh-ci-test-reliability` (copiadas do repositório oficial `deepseek-ai/deepseek-harness`, MIT, com a licença).
+5. README (categoria Tech e seção "Memória entre relatórios") e esta seção atualizados.
+
+### Decisões do usuário (não reabrir sem motivo)
+
+- Relação com os anteriores: referências no texto + seção "Conexões" no fim (opção A).
+- Ordem dos itens: pela data de geração. Quem é "anterior": só a mesma pasta exata.
+- Modelo: **manter a DeepSeek V4.1 Flash** (`deepseek-flash`). Projeto fica no `D:` (HDD); o `C:` (SSD) tem só ~13 GB livres.
+- Pular spec e plano em arquivo para acelerar: as seções 1 e 2 do design, aprovadas no chat, valem como design.
+
+### Insights e achados
+
+- **Custo real medido** (Ep. 1 de 64 min): 8.235 tokens de entrada, 5.572 de saída = ~US$ 0,009 no pico, ~US$ 0,005 fora do
+  pico. 73% do custo é saída. Pico (tarifa dobrada): 01–04 e 06–10 UTC em dias úteis = 22h–01h e 03h–07h em Brasília.
+- **Cache hit medido: 3%** (256 de 8.235). Os 3 trechos rodam em paralelo e chegam juntos antes de existir cache; o
+  comentário em `summarization.py` promete mais do que ocorre. Cache hit custa US$ 0,003/M contra 0,15/M do miss (50x).
+  Não existe garantia de que requests simultâneos se ajudem (a documentação não cobre). **Ainda não medimos a taxa depois da memória.**
+- **Ordem das fichas importa pro cache:** do mais antigo ao mais novo, o item novo entra no fim e o começo do prompt fica
+  igual ao do episódio anterior. Do mais novo ao mais antigo, o bloco inteiro perde o cache a cada item.
+- Regras de cache da DeepSeek (guia oficial e notas do time): casa por prefixo desde o primeiro token; unidade só conta se
+  coincidir inteira; chamada auxiliar deve reusar o system prompt e pôr a instrução nova por último; nada variável no começo.
+- **Teste da skill com subagentes (4 amostras, Sonnet):** sem a skill, sob pressão, o agente aceitou "fichas da mais nova
+  à mais antiga" e system próprio pra ficha; com a skill recusou os 3 pedidos. A skill foi corrigida depois (a ficha reusa o
+  system, não "o mesmo conteúdo"; estouro de limite corta as mais antigas). **Essa correção não foi retestada.**
+- **Jev (TypeSafe)** pesquisado: modelo de decisões tipadas (Noul/sim-não, Choice, Score), US$ 0,042/M de entrada, saída
+  grátis, sem português confirmado, cadastro pausado em 22/09/2026. **Não vale integrar:** o custo está em texto gerado, e o
+  ganho máximo seria ~4% de menos de 1 centavo. Só faria sentido pra priorizar fichas se uma pasta estourar o limite.
+- Concorrentes na faixa barata (preços de agregadores, não confirmados nas páginas oficiais exceto Gemini e DeepSeek):
+  GPT-5.6 Luna ~US$ 0,20/1,20, Qwen3.8-Flash ~0,15/0,47 (verboso), Gemini 3.1 Flash-Lite 0,25/1,50. Nenhum compensa trocar.
+- `deepseek-recipe` (tokenizador oficial em Python) existe mas exige Rust/OpenCV; descartado por ora. Limite por caracteres basta.
+- Repositório `deepseek-harness`: das ~16 skills, só `dsh-error-handling` e `dsh-ci-test-reliability` servem aqui. As demais
+  são específicas do Harness (Cordis, docs bilíngues, PRs empilhados, Office, sandbox).
+
+### Erros e correções desta sessão
+
+- Apaguei sem querer `build_system_prompt` e `build_part_instruction` ao editar com um parâmetro errado
+  (`new_str` em vez de `new_string`); restaurei e conferi pelo diff.
+- A contagem das sugestões incluía subfolders, mas a memória usa a pasta exata: corrigido (`folderCounts` conta só a pasta;
+  pasta que só tem subpastas mostra "só subpastas").
+- **Testes instáveis:** `created_at` tinha resolução de segundos; itens no mesmo segundo empatavam e a ordem virava o uuid
+  aleatório. Passou a `timespec="milliseconds"`. Em produção nada muda. Cinco rodadas seguidas passaram, o que é teste de
+  estresse, não prova.
+- `ACADEMIC_APPROACH_RULES[approach]` virou `.get(approach, teórico)`: antes, abordagem desconhecida quebrava.
+- Clone completo do `deepseek-harness` travou; usei a API do GitHub e `raw.githubusercontent.com` (arquivos individuais).
+- Playwright travou clicando num `<label>` coberto pelo `<input type=radio>` (do próprio script de teste, não do app).
+- Parte do trabalho foi feita com o modelo Sonnet por engano; o certo era Opus. A revisão final foi feita no Opus.
+- `bash` recusa heredoc com aspas aninhadas contendo `'''`; use as ferramentas de edição.
+
+### O que NÃO foi verificado
+
+- **Nenhuma chamada real à DeepSeek** com a memória: `CARD_INSTRUCTION`, `CONNECTIONS_INSTRUCTION` e `MEMORY_HEADER` são
+  rascunho que nenhum modelo real viu (a seção 3 do design, a redação dos prompts, foi pulada a pedido).
+- O clique real numa sugestão do datalist: a automação não abre a lista nativa. O usuário disse que testou e pediu para
+  derrubar o servidor, mas não relatou o resultado.
+- JavaScript não tem testes automatizados; foi verificado só no navegador.
+- Cloud Run com a feature nova: não houve deploy.
+
+### Próximos passos
+
+1. **Teste de aceitação (~US$ 0,007):** `python -m scriptmax`, biblioteca, Ep. 1 (pasta `Series`, categoria Filmes) →
+   **Regerar** → ler `data/reports/bb61f…/memory.md`. Se a ficha ficar ruim, ajustar `CARD_INSTRUCTION` em `summarization.py`.
+2. Enviar o Ep. 2 na mesma pasta: conferir "memória: 1 item" no subtítulo e a seção "Conexões com os anteriores" no PDF.
+3. Ler `cached_prompt_tokens` / `prompt_tokens` no `meta.json` do Ep. 2 e comparar com os 3% do Ep. 1 (usar a skill
+   `deepseek-cache-economy`). Se o cache continuar baixo, avaliar rodar o primeiro trecho antes dos outros (hoje descartado
+   por falta de medição).
+4. Decidir sobre `.claude/skills/deepseek-chat/deepseek-chat/SKILL.md`: está aninhada errado, sem o script, e com o modelo
+   `deepseek-chat` que não consta mais nos preços. Consertar (mover, usar `deepseek-flash`, script Python com o pacote
+   `openai`) ou apagar.
+5. Commit e push (usuário), depois deploy no Cloud Run pelo comando do README.
+6. Limitações conhecidas da memória: a ficha derivada de um áudio entra no prompt de sistema dos itens seguintes, então
+   instruções embutidas no áudio poderiam persistir (app de usuário único; risco baixo). Rótulos "Item N" podem pular
+   número se uma ficha falhar. Itens fora de ordem de envio ficam na ordem da data de geração.
 
 ## O que foi feito nesta sessão (2026-10-04)
 
@@ -115,6 +271,7 @@ grátis da Groq com o DeepSeek como reserva.
 
 ## Pendências
 
+0. **Ver "Próximos passos" da sessão de 2026-10-09** (teste de aceitação da memória, commit e deploy).
 1. **Testar no app publicado** com microfone real e com áudio do PC, inclusive pelo celular (o caminho de upload,
    DeepSeek e e-mail já foi validado).
 2. Commit do `SESSION_STATE.md`, que o usuário faz.
@@ -143,9 +300,10 @@ scriptmax/
   audio.py         ffmpeg -> PCM mono 16 kHz; blocos de 10 min cortados no silêncio; FLAC
   transcription.py GroqTranscriber com cache por bloco em data/transcripts/<hash>/
   summarization.py Summarizer: partes em paralelo, continua se a resposta for cortada
-  categories.py    4 categorias + prompts
+  categories.py    5 categorias + prompts
   latex.py / rendering.py  Markdown seguro (nh3) + MathJax; PDF via Playwright, com fallback fpdf2
   storage.py / library.py  data/reports/<id>/ e espelho de PDFs em data/biblioteca/<Categoria>/<Pasta>/
+  memory.py                fichas por relatório (memory.md) e bloco de memória da pasta exata
   pipeline.py / jobs.py    process/regenerate/move/delete; fila com 1 worker e retry
   security.py / server.py  sessão por cookie HMAC, CSRF por Origin, rate limit; rotas /api/*
 static/            index.html, styles.css, fontes auto-hospedadas, js/*

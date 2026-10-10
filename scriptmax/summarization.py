@@ -61,6 +61,19 @@ CONTINUE_INSTRUCTION = (
     "sem repetir nada do que já escreveu e sem comentários sobre a continuação."
 )
 
+CARD_MAX_TOKENS = 2_000
+CARD_INSTRUCTION = (
+    "Escreva a ficha de memória do relatório acima, para servir de contexto aos próximos itens da mesma "
+    "sequência ({label}). 300 a 600 palavras, em português do Brasil, em Markdown simples, sem introdução. "
+    "Registre o que um item futuro precisaria saber: conceitos e definições, personagens, decisões, nomes e "
+    "termos ditos, e pontas abertas ou pendências. Use apenas o que está no relatório; não invente."
+)
+CONNECTIONS_INSTRUCTION = (
+    "Depois das seções finais da estrutura, acrescente a seção '# Conexões com os anteriores': o que evoluiu "
+    "ou foi retomado em relação às fichas da memória e as pontas soltas, abertas ou resolvidas. "
+    "Cite os itens pelo rótulo e marque inferências como 'Análise:'."
+)
+
 ProgressCallback = Callable[[int, int], None]
 
 
@@ -72,6 +85,7 @@ class SummaryError(RuntimeError):
 class SummaryRequest:
     subject: str
     category: Category
+    memory: str = ""
 
 
 @dataclass
@@ -150,18 +164,24 @@ def _hard_wrap(sentence: str, max_chars: int) -> list[str]:
     return pieces
 
 
-def build_system_prompt(category: Category, approach: str) -> str:
-    """Prefixo idêntico em todas as partes de um mesmo áudio (maximiza o cache da DeepSeek)."""
+def build_system_prompt(category: Category, approach: str, memory: str = "") -> str:
+    """Prefixo idêntico em todas as partes de um mesmo áudio (maximiza o cache da DeepSeek).
+
+    A memória fica por último: é a única parte que cresce de um item para o próximo.
+    """
     sections = [BASE_RULES, profile_for(category).rules]
     if category is Category.ACADEMIC:
-        sections.append(ACADEMIC_APPROACH_RULES[approach])
+        sections.append(ACADEMIC_APPROACH_RULES.get(approach, ACADEMIC_THEORY_RULES))
+    if memory:
+        sections.append(memory)
     return "\n\n".join(sections)
 
 
-def build_part_instruction(subject: str, part: int, total: int) -> str:
+def build_part_instruction(subject: str, part: int, total: int, has_memory: bool = False) -> str:
     header = f"Título informado pelo usuário: {subject}\n"
+    connections = f" {CONNECTIONS_INSTRUCTION}" if has_memory and part == total else ""
     if total == 1:
-        return header + "Gere o relatório completo da transcrição abaixo."
+        return header + "Gere o relatório completo da transcrição abaixo." + connections
     intro = "Comece pelas seções iniciais da estrutura." if part == 1 else "Não repita seções introdutórias: continue o conteúdo."
     outro = "Feche com as seções finais da estrutura." if part == total else "Não escreva seções finais: haverá mais partes."
     return (
@@ -169,6 +189,7 @@ def build_part_instruction(subject: str, part: int, total: int) -> str:
         + f"Este é o trecho {part} de {total} de uma transcrição longa, em ordem. "
         + f"Gere o relatório APENAS deste trecho. {intro} {outro} "
         + "Não escreva 'Parte N' nos títulos."
+        + connections
     )
 
 
@@ -190,8 +211,9 @@ class Summarizer:
 
         # Só a categoria acadêmica precisa decidir entre exatas e teórico.
         approach = self.classify(transcript_text) if request.category is Category.ACADEMIC else ""
-        system_prompt = build_system_prompt(request.category, approach)
+        system_prompt = build_system_prompt(request.category, approach, request.memory)
         subject = request.subject
+        has_memory = bool(request.memory)
         total = len(chunks)
         results: list[PartResult | None] = [None] * total
         completed = 0
@@ -199,7 +221,8 @@ class Summarizer:
 
         def generate(index: int) -> None:
             nonlocal completed
-            results[index] = self._generate_part(system_prompt, build_part_instruction(subject, index + 1, total), chunks[index])
+            instruction = build_part_instruction(subject, index + 1, total, has_memory)
+            results[index] = self._generate_part(system_prompt, instruction, chunks[index])
             with progress_lock:
                 completed += 1
                 done = completed
@@ -210,6 +233,26 @@ class Summarizer:
             list(executor.map(generate, range(total)))
 
         return self._assemble([result for result in results if result is not None], approach)
+
+    def write_memory_card(self, request: SummaryRequest, approach: str, report_markdown: str) -> str:
+        """Ficha curta do relatório. Reusa o system prompt dos trechos (mesmo prefixo no cache);
+        só o que muda vai no user, com a instrução por último."""
+        label = profile_for(request.category).label
+        user = (
+            f"Título: {request.subject}\n\nRELATÓRIO:\n\"\"\"\n{report_markdown}\n\"\"\"\n\n"
+            + CARD_INSTRUCTION.format(label=label)
+        )
+        messages = [
+            {"role": "system", "content": build_system_prompt(request.category, approach, request.memory)},
+            {"role": "user", "content": user},
+        ]
+        try:
+            card, _ = self._complete(messages, TokenUsage(), max_tokens=CARD_MAX_TOKENS)
+        except openai.APIError as error:
+            raise SummaryError(f"ficha de memória: {error}") from error
+        if not card.strip():
+            raise SummaryError("ficha de memória: resposta vazia")
+        return card.strip()
 
     def classify(self, transcript_text: str) -> str:
         sample = transcript_text[:CLASSIFY_SAMPLE_CHARS]
@@ -246,10 +289,12 @@ class Summarizer:
             return PartResult(markdown="", usage=usage, error=f"resposta vazia (finish_reason={finish_reason})")
         return PartResult(markdown=text.strip(), usage=usage, truncated=finish_reason == "length")
 
-    def _complete(self, messages: list[dict[str, str]], usage: TokenUsage) -> tuple[str, str | None]:
+    def _complete(
+        self, messages: list[dict[str, str]], usage: TokenUsage, max_tokens: int = MAX_OUTPUT_TOKENS
+    ) -> tuple[str, str | None]:
         response = self._client.chat.completions.create(
             model=self._model,
-            max_tokens=MAX_OUTPUT_TOKENS,
+            max_tokens=max_tokens,
             temperature=0.3,
             messages=messages,
             extra_body=DISABLE_THINKING,

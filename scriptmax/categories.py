@@ -1,4 +1,4 @@
-"""As 4 categorias de áudio e as instruções específicas de cada uma."""
+"""As 5 categorias de áudio e as instruções específicas de cada uma."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -10,6 +10,7 @@ class Category(str, Enum):
     MEDIA = "filmes-series"
     ACADEMIC = "academico"
     WORK = "trabalho"
+    TECH = "tech"
 
 
 @dataclass(frozen=True)
@@ -99,6 +100,24 @@ Se for TREINAMENTO, PALESTRA OU INSTRUÇÃO:
 # Checklist final
 Regras:
 - Registre números, datas, valores e nomes de sistemas exatamente como ditos.""",
+    ),
+    Category.TECH: CategoryProfile(
+        label="Tech / Tecnologia",
+        library_folder="Tech",
+        whisper_hint="Conteúdo técnico de tecnologia e programação sobre",
+        rules="""## CATEGORIA: TECH
+Objetivo: material de referência técnica para estudar e aplicar a tecnologia apresentada.
+Estrutura (omita seções sem conteúdo no áudio):
+# Visão geral — o problema que a tecnologia resolve e a ideia central em 2 a 4 frases.
+# Conceitos e arquitetura — cada conceito com definição clara; componentes e como se comunicam (fluxo de dados, requisição, deploy).
+# Stack e ferramentas — tabela | Ferramenta | Papel | Versão |; use "não informada" quando o áudio não disser a versão.
+# Passo a passo — procedimentos numerados; comandos, configurações e código em blocos ``` com a linguagem indicada (bash, python, yaml...).
+# Comparações e trade-offs — alternativas discutidas e quando escolher cada uma.
+# Boas práticas e armadilhas — recomendações, erros comuns e como evitá-los.
+# Glossário — termos técnicos com definição de uma linha.
+Regras:
+- Escreva nomes de tecnologias, comandos, flags, APIs e versões exatamente como ditos; não invente nenhum que não esteja no áudio.
+- Separe o que é fato técnico do que é opinião ou preferência do autor; marque opiniões como "Opinião do autor:".""",
     ),
 }
 

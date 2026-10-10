@@ -19,14 +19,21 @@ function matchesFilter(report, filter) {
   return `${report.subject} ${report.folder} ${report.source_name}`.toLocaleLowerCase('pt-BR').includes(filter);
 }
 
-export function foldersOf(reports, categoryId) {
-  const folders = new Set();
+// Pasta -> nº de relatórios que estão NELA (sem contar subpastas), em ordem alfabética.
+// A memória do ScriptMax usa a pasta exata, então a contagem tem o mesmo critério.
+// Pastas que só têm subpastas aparecem com 0.
+export function folderCounts(reports, categoryId) {
+  const counts = new Map();
   for (const report of reports) {
     if (report.category !== categoryId || !report.folder) continue;
     const segments = report.folder.split('/');
-    segments.forEach((_, index) => folders.add(segments.slice(0, index + 1).join('/')));
+    segments.forEach((_, index) => {
+      const path = segments.slice(0, index + 1).join('/');
+      if (!counts.has(path)) counts.set(path, 0);
+    });
+    counts.set(report.folder, counts.get(report.folder) + 1);
   }
-  return [...folders].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  return new Map([...counts].sort(([a], [b]) => a.localeCompare(b, 'pt-BR')));
 }
 
 export class Library {

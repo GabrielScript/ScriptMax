@@ -50,8 +50,11 @@
             <div class="field">
               <label for="subject">Título / assunto <span aria-hidden="true">*</span></label>
               <input id="subject" name="subject" type="text" maxlength="120" required aria-required="true"
+                     list="subject-options" autocomplete="off"
                      aria-describedby="subject-hint details-error" placeholder="Álgebra Linear — Produto interno">
-              <p id="subject-hint" class="hint">Com vários anexos, o nome de cada arquivo é somado ao título.</p>
+              <datalist id="subject-options"></datalist>
+              <p id="subject-hint" class="hint">Escolha uma pasta da lista para continuar uma sequência. Com vários anexos, o nome de cada arquivo é somado ao título.</p>
+              <p id="subject-announcer" class="visually-hidden" role="status"></p>
             </div>
             <div class="field">
               <label for="folder">Pasta <span class="optional">opcional</span></label>

@@ -13,6 +13,7 @@ Sem GPU, sem Kaggle: tudo roda no seu PC e as partes pesadas são APIs baratas.
 | Filmes / Séries / Documentários | ficha, sinopse, desenvolvimento, personagens, fatos e argumentos, temas, falas marcantes (com aviso de spoiler) |
 | Acadêmico / Conhecimento | apostila; detecta exatas e usa LaTeX; "pontos de atenção para prova" e glossário |
 | Trabalho | reunião → resumo executivo, decisões, itens de ação; treinamento → procedimentos e checklist |
+| Tech / Tecnologia | visão geral, arquitetura, tabela da stack, passo a passo com código, trade-offs, armadilhas e glossário |
 
 ## Instalação
 
@@ -35,6 +36,21 @@ python -m scriptmax       # abre em http://127.0.0.1:8000
    sem transcrever de novo.
 4. **Saída** → HTML sanitizado com MathJax + PDF via Chromium, copiado para
    `data/biblioteca/<Categoria>/<Pasta>/<Subpasta>/`.
+
+### Memória entre relatórios (séries, cursos, stacks)
+
+Relatórios na **mesma categoria e pasta exata** formam uma sequência, ordenada pela data de geração. Ao gerar o item N,
+o relatório recebe uma **ficha** (300–600 palavras) de cada item anterior, cita-os no texto quando há relação real e
+termina com a seção **Conexões com os anteriores**. Cada relatório pronto guarda a sua ficha em
+`data/reports/<id>/memory.md`.
+
+- A memória é recalculada a cada geração: mover, apagar ou regerar um item nunca a deixa desatualizada. Regerar o item 3
+  enxerga só os itens 1 e 2 (sem spoilers).
+- Itens antigos sem ficha ganham uma na hora. Pasta na raiz da categoria não tem memória.
+- Limite de ~30 mil caracteres (≈10 fichas): acima disso ficam as mais recentes e o prompt informa quantas foram omitidas.
+- A ficha nunca derruba o relatório: se falhar, o status avisa e ela é refeita no próximo item.
+- Custo extra: uma chamada curta por relatório (~US$ 0,002). A memória vai no prompt de sistema, do mais antigo ao mais
+  novo, para o cache da DeepSeek aproveitar o prefixo (veja `.claude/skills/deepseek-cache-economy`).
 
 ## Custos (outubro/2026)
 

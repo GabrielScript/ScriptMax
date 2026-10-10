@@ -66,6 +66,17 @@ def test_move_updates_library_copy(local_client: TestClient, tmp_path: Path) -> 
     assert not (tmp_path / "biblioteca" / moved["library_pdf"]).exists()
 
 
+def test_tech_category_goes_to_its_library_folder(local_client: TestClient, tmp_path: Path) -> None:
+    response = upload(local_client, category="tech", folder="Kubernetes")
+    assert response.status_code == 202, response.text
+    job = wait_for_job(local_client, response.json()["id"])
+    assert job["stage"] == "done", job
+    report = local_client.get("/api/reports").json()[0]
+    assert report["category"] == "tech"
+    assert report["library_pdf"].startswith("Tech/Kubernetes/")
+    assert "tech" in {category["id"] for category in local_client.get("/api/config").json()["categories"]}
+
+
 def test_rejects_bad_input(local_client: TestClient) -> None:
     assert upload(local_client, subject="   ").status_code == 400
     assert upload(local_client, folder="a/b/c/d").status_code == 400

@@ -77,7 +77,8 @@ class PdfLibrary:
     def publish(self, source_pdf: Path, target: Path) -> str:
         """Copia o PDF para a biblioteca; retorna o caminho relativo (guardado no meta)."""
         target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source_pdf, target)
+        # copyfile (não copy2): o Cloud Storage FUSE recusa utime/chmod com EPERM.
+        shutil.copyfile(source_pdf, target)
         return target.relative_to(self._root).as_posix()
 
     def remove(self, relative_path: str) -> None:

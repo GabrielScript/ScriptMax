@@ -15,9 +15,10 @@ from typing import Protocol
 from scriptmax.categories import Category, profile_for
 from scriptmax.emailer import EmailError, EmailSender
 from scriptmax.library import PdfLibrary, normalize_folder
+from scriptmax.memory import MemoryBlock, collect_memory
 from scriptmax.rendering import ReportPage, render_html, write_pdf
 from scriptmax.storage import ReportFile, ReportMeta, ReportStore
-from scriptmax.summarization import ProgressCallback, SummaryRequest, SummaryResult
+from scriptmax.summarization import ProgressCallback, SummaryError, SummaryRequest, SummaryResult
 from scriptmax.transcription import Transcript, format_timestamp
 
 logger = logging.getLogger(__name__)
@@ -35,6 +36,9 @@ class Stage(str, Enum):
 
 ProgressReporter = Callable[[Stage, float, str], None]
 
+CARD_WARNING = "Aviso: a ficha de memória não foi gerada e será refeita no próximo item."
+MEMORY_WARNING = "Aviso: a memória da pasta não pôde ser montada; o relatório foi gerado sem ela."
+
 
 class ReportBuildError(RuntimeError):
     """A transcrição foi salva, mas o relatório falhou: deve ser regerado, não reprocessado."""
@@ -50,6 +54,8 @@ class TranscriberPort(Protocol):
 
 class SummarizerPort(Protocol):
     def summarize(self, transcript_text: str, request: SummaryRequest, on_progress: ProgressCallback | None = None) -> SummaryResult: ...
+
+    def write_memory_card(self, request: SummaryRequest, approach: str, report_markdown: str) -> str: ...
 
 
 @dataclass(frozen=True)
@@ -119,12 +125,18 @@ class ReportPipeline:
 
     def _build_report(self, meta: ReportMeta, transcript_text: str, report: ProgressReporter, send_email: bool) -> str:
         category = Category(meta.category)
+        warnings: list[str] = []
+        # Uma ficha velha nunca vale depois de regerar: ela é refeita junto com o relatório.
+        self._store.remove_file(meta.id, ReportFile.MEMORY)
+        memory = self._collect_memory(meta, report, warnings)
         report(Stage.SUMMARIZING, 0.0, "Gerando relatório com DeepSeek...")
         summary = self._summarizer.summarize(
             transcript_text,
-            SummaryRequest(subject=meta.subject, category=category),
+            SummaryRequest(subject=meta.subject, category=category, memory=memory.text),
             on_progress=lambda done, total: report(Stage.SUMMARIZING, done / total, f"Relatório: trecho {done}/{total}"),
         )
+        meta.memory_items = memory.items
+        self._write_card(meta, category, memory, summary, report, warnings)
         report(Stage.RENDERING, 0.0, "Gerando HTML e PDF...")
         page = ReportPage(title=meta.subject, subtitle=_subtitle(meta, category), markdown_text=summary.markdown)
         self._store.write_text(meta.id, ReportFile.MARKDOWN, summary.markdown)
@@ -138,7 +150,43 @@ class ReportPipeline:
         self._publish_to_library(meta, pdf_path)
         self._store.save_meta(meta)
         logger.info("Relatório %s pronto. Tokens: %s", meta.id, meta.usage)
-        return self._notify(meta, [pdf_path, html_path], send_email)
+        return " ".join([self._notify(meta, [pdf_path, html_path], send_email), *warnings])
+
+    def _collect_memory(self, meta: ReportMeta, report: ProgressReporter, warnings: list[str]) -> MemoryBlock:
+        """Memória é aditiva: qualquer falha inesperada gera o relatório sem ela, com aviso visível."""
+        if not meta.folder:
+            return MemoryBlock()
+        report(Stage.SUMMARIZING, 0.0, "Montando memória da pasta...")
+        try:
+            return collect_memory(
+                self._store,
+                meta,
+                self._summarizer,
+                on_progress=lambda done, total: report(Stage.SUMMARIZING, 0.0, f"Memória da pasta: item {done}/{total}"),
+            )
+        except (OSError, ValueError, TypeError, KeyError) as error:
+            logger.warning("Memória da pasta de %s não montada: %s", meta.id, error)
+            warnings.append(MEMORY_WARNING)
+            return MemoryBlock()
+
+    def _write_card(
+        self,
+        meta: ReportMeta,
+        category: Category,
+        memory: MemoryBlock,
+        summary: SummaryResult,
+        report: ProgressReporter,
+        warnings: list[str],
+    ) -> None:
+        """Ficha do item atual, com o mesmo system prompt dos trechos. Falhar não derruba o relatório."""
+        report(Stage.SUMMARIZING, 1.0, "Gerando ficha de memória...")
+        request = SummaryRequest(subject=meta.subject, category=category, memory=memory.text)
+        try:
+            card = self._summarizer.write_memory_card(request, summary.approach, summary.markdown)
+            self._store.write_text(meta.id, ReportFile.MEMORY, card)
+        except (SummaryError, OSError) as error:
+            logger.warning("Ficha de memória de %s não gerada: %s", meta.id, error)
+            warnings.append(CARD_WARNING)
 
     def _publish_to_library(self, meta: ReportMeta, pdf_path: Path) -> None:
         target = self._library.target_path(Category(meta.category), meta.folder, meta.library_title, meta.library_suffix)
@@ -163,5 +211,6 @@ class ReportPipeline:
 
 def _subtitle(meta: ReportMeta, category: Category) -> str:
     duration = format_timestamp(meta.duration_seconds) if meta.duration_seconds else ""
-    parts = [profile_for(category).label, meta.created_at[:10], f"duração {duration}" if duration else ""]
+    memory = f"memória: {meta.memory_items} {'item' if meta.memory_items == 1 else 'itens'}" if meta.memory_items else ""
+    parts = [profile_for(category).label, meta.created_at[:10], f"duração {duration}" if duration else "", memory]
     return " · ".join(part for part in parts if part)
